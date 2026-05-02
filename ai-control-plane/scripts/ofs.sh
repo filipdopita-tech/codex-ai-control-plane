@@ -344,22 +344,163 @@ cmd_phone() {
   cat <<'EOF'
 Phone control plane (mobile dispatcher):
 
-Setup status:
-  - Hermes Agent installed on Flash (/usr/local/bin/hermes)
-  - Telegram bot: NOT YET CONFIGURED (Wave 2 — vyžaduje VPS up)
+ACTIVE: Hermes webhook gateway (HTTPS + HMAC)
+  Endpoint:  https://dispatch.oneflow.cz/webhooks/{dispatch,status}
+  Method:    POST + Content-Type: application/json
+  Body:      {"body":"<your task>"}
+  Auth:      X-Hub-Signature-256: sha256=<HMAC-SHA256(body, route_secret)>
+  Secrets:   /root/.credentials/hermes-webhook.env (per-route in webhook_subscriptions.json)
 
-Once configured (Wave 2):
-  - Open Telegram → @oneflow_dispatch_bot (TBD)
-  - Send: /dispatch <free-form task>
-  - Bot routes to Conductor inbox on Flash
-  - Result reply with task ID + link to handoff
-  - Status pull: /status → ekosystem health JSON
+Helpers from Mac:
+  ofs dispatch "task here"      send dispatch (auto-fetches secret via SSH)
+  ofs notify   "msg" [priority] push ntfy notification to phone (no LLM call)
 
-Until then:
-  - Use VS Code Remote SSH to Flash → claude session there
-  - ssh root@10.77.0.1 → submit tasks manually to Conductor
+iPhone Shortcuts (one-time setup, ~3 min):
+  1. Open Shortcuts app → Create Shortcut
+  2. Add action: "Get Contents of URL"
+     URL: https://dispatch.oneflow.cz/webhooks/dispatch
+     Method: POST
+     Headers: X-Hub-Signature-256 (use secret from RECOVERY-VPS-FLASH or run: ofs dispatch --show-secret)
+     Body: JSON {"body":"<Ask for input>"}
+  3. Save as "Dispatch to Flash"
+  4. Add to Home Screen + Siri trigger ("Hey Siri, Dispatch")
+
+Telegram (optional 1-click activate, see telegram-setup.md):
+  Status: scaffold ready. Filip vytvoří bot v @BotFather (~3 min) → ofs telegram-activate
+
+ntfy push (already working):
+  ntfy.oneflow.cz (subscribe in ntfy iOS app, topic: Filip)
+  Triggered by: ofs notify, resource-monitor alerts, security-audit weekly
 EOF
   log "phone" "info" ""
+}
+
+# Dispatch a task to Hermes webhook gateway (mobile/remote dispatch)
+# Auto-fetches per-route secret from VPS via SSH, computes HMAC, POSTs.
+cmd_dispatch() {
+  local route="dispatch" task="" show_secret=0 use_local=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --status)        route="status"; shift ;;
+      --show-secret)   show_secret=1; shift ;;
+      --local)         use_local=1; shift ;;
+      *)               task="${task:+$task }$1"; shift ;;
+    esac
+  done
+
+  local v=$(vps_status)
+  if [ "$v" = "down" ]; then
+    color red "VPS Flash DOWN — dispatch endpoint unreachable. Recovery: $ROOT/RECOVERY-VPS-FLASH.md"; echo
+    log "dispatch" "fail" "vps_down"
+    exit 2
+  fi
+
+  local target=$VPS_WG
+  [ "$v" = "public" ] && target=$VPS_PUBLIC
+
+  # Fetch per-route secret from VPS (single SSH, cached for show-secret)
+  local secret
+  secret=$(ssh -o ConnectTimeout=5 "$target" \
+    "python3 -c \"import json; print(json.load(open('/root/.hermes/webhook_subscriptions.json'))['$route']['secret'])\" 2>/dev/null") || {
+    color red "Failed to fetch route secret for '$route' from VPS"; echo
+    log "dispatch" "fail" "secret_fetch"
+    exit 3
+  }
+
+  if [ "$show_secret" -eq 1 ]; then
+    echo "Route:  $route"
+    echo "Secret: $secret"
+    echo "Endpoint: https://dispatch.oneflow.cz/webhooks/$route"
+    echo
+    echo "iPhone Shortcuts header value: sha256=<HMAC-SHA256 of body using above secret>"
+    log "dispatch" "show-secret" "$route"
+    return
+  fi
+
+  if [ -z "$task" ] && [ "$route" = "dispatch" ]; then
+    color red "Usage: ofs dispatch \"task description\""; echo
+    color yellow "       ofs dispatch --status        (request system status)"; echo
+    color yellow "       ofs dispatch --show-secret    (reveal HMAC secret)"; echo
+    exit 1
+  fi
+
+  local payload
+  if [ "$route" = "status" ]; then
+    payload='{}'
+  else
+    # Safe JSON encoding via python (handles quotes, newlines)
+    payload=$(python3 -c "import json,sys; print(json.dumps({'body': sys.argv[1]}))" "$task")
+  fi
+
+  local sig
+  sig=$(printf '%s' "$payload" | openssl dgst -sha256 -hmac "$secret" -binary | xxd -p -c 64)
+
+  local url="https://dispatch.oneflow.cz/webhooks/$route"
+  [ "$use_local" -eq 1 ] && url="http://10.77.0.1:8644/webhooks/$route"
+
+  echo "POST → $url"
+  local resp
+  resp=$(curl -s -X POST "$url" \
+    -H "Content-Type: application/json" \
+    -H "X-Hub-Signature-256: sha256=$sig" \
+    -d "$payload" --max-time 30 -w "\n___CODE=%{http_code}")
+  local code=$(echo "$resp" | grep -oE "___CODE=[0-9]+" | cut -d= -f2)
+  local body=$(echo "$resp" | sed 's/___CODE=[0-9]*//')
+
+  if [ "$code" = "202" ] || [ "$code" = "200" ]; then
+    color green "✓ Dispatch accepted (HTTP $code)"; echo
+    echo "$body" | python3 -m json.tool 2>/dev/null || echo "$body"
+    log "dispatch" "ok" "$route: $task"
+  else
+    color red "✗ Dispatch failed (HTTP $code)"; echo
+    echo "$body"
+    log "dispatch" "fail" "code=$code route=$route"
+    exit 4
+  fi
+}
+
+# Push notification to phone via ntfy (no LLM cost)
+cmd_notify() {
+  local title="ofs" priority="default" msg=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title) title="$2"; shift 2 ;;
+      --priority|-p) priority="$2"; shift 2 ;;
+      *) msg="${msg:+$msg }$1"; shift ;;
+    esac
+  done
+  if [ -z "$msg" ]; then
+    color red "Usage: ofs notify [--title T] [--priority high|default|low] \"message\""; echo
+    exit 1
+  fi
+  notify "$title" "$msg" "$priority"
+  echo "Notified: $title → $msg"
+  log "notify" "ok" "$title: $msg"
+}
+
+# Telegram activation helper — runs after Filip creates bot in @BotFather
+cmd_telegram_activate() {
+  cat <<'EOF'
+Telegram Gateway Activation (1-click after bot creation):
+
+Prerequisites (Filip, ~3 min):
+  1. Open Telegram → @BotFather
+  2. /newbot → name: "OneFlow Dispatch" → username: oneflow_dispatch_bot
+  3. Copy the HTTP API token (looks like: 1234567890:AAAA-BBB...)
+  4. Find your chat_id: message @userinfobot → copy ID (e.g. 123456789)
+
+Activate (run on Mac after bot created):
+  ssh root@10.77.0.1 "echo TELEGRAM_BOT_TOKEN=<token> >> /root/.hermes/.env"
+  ssh root@10.77.0.1 "echo TELEGRAM_ALLOWED_CHAT_IDS=<chat_id> >> /root/.hermes/.env"
+  ssh root@10.77.0.1 "hermes setup gateway --reconfigure --non-interactive"
+  ssh root@10.77.0.1 "systemctl --user restart hermes-gateway"
+
+Test:
+  In Telegram: /start → /dispatch "echo from telegram"
+  → reply within ~30s with execution result.
+
+Until activation, dispatch.oneflow.cz/webhooks/dispatch endpoint is the working alternative.
+EOF
 }
 
 cmd_logs() {
@@ -402,6 +543,11 @@ COMMANDS
 
   Mobile
     phone               phone control plane info / setup status
+    dispatch "task"     POST task to https://dispatch.oneflow.cz/webhooks/dispatch (HMAC)
+    dispatch --status   request system status from VPS (LLM agent)
+    dispatch --show-secret   reveal HMAC secret for iPhone Shortcuts setup
+    notify "msg"        push ntfy notification to phone (no LLM)
+    telegram-activate   show Telegram gateway activation steps (after Filip creates bot)
 
   Help
     help, -h, --help    this message
@@ -436,6 +582,9 @@ case "${1:-help}" in
   handoff)     shift; cmd_handoff "$@" ;;
   logs|l)      shift; cmd_logs "$@" ;;
   phone|p)     shift; cmd_phone "$@" ;;
+  dispatch|disp)            shift; cmd_dispatch "$@" ;;
+  notify|n)                 shift; cmd_notify "$@" ;;
+  telegram-activate|tg)     shift; cmd_telegram_activate "$@" ;;
   help|-h|--help) cmd_help ;;
   *)           color red "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac
