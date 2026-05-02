@@ -3,11 +3,12 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: test-bridge.sh [--codex-only|--claude-only]
+Usage: test-bridge.sh [--codex-only|--claude-only|--router-only]
 
 End-to-end smoke test of the AI bridge:
-  1. Codex roundtrip (delegate-to-codex.sh against this workspace)
-  2. Claude review roundtrip (ask-claude-review.sh against this workspace)
+  1. Router dry-run matrix (does not call AI)
+  2. Codex roundtrip (delegate-to-codex.sh against this workspace)
+  3. Claude review roundtrip (ask-claude-review.sh against this workspace)
 
 Each step asks for a single-line answer and verifies a non-empty result
 file is produced. Does not modify project files.
@@ -15,6 +16,7 @@ file is produced. Does not modify project files.
 Exit codes:
   0  both roundtrips passed
   1  bad usage
+  5  router dry-run failed
   10 codex roundtrip failed
   20 claude roundtrip failed
 EOF
@@ -26,6 +28,7 @@ case "${1:-}" in
   --help|-h) usage 0 ;;
   --codex-only) MODE="codex" ;;
   --claude-only) MODE="claude" ;;
+  --router-only) MODE="router" ;;
   "") ;;
   *) echo "Unknown arg: $1" >&2; usage 1 ;;
 esac
@@ -62,9 +65,29 @@ echo "AI Bridge smoke test"
 echo "===================="
 echo "workspace: $WORKSPACE"
 
+if [ "$MODE" = "all" ] || [ "$MODE" = "router" ]; then
+  echo
+  echo "[1/3] Router dry-run matrix"
+  ROUTE_IMPL="$("$ROOT/scripts/route-task.sh" --dry-run "$WORKSPACE" "oprav bug v testech a spusť build")"
+  ROUTE_FULL="$("$ROOT/scripts/route-task.sh" --dry-run "$WORKSPACE" "otestuj browser a Google Drive integraci")"
+  ROUTE_REVIEW="$("$ROOT/scripts/route-task.sh" --dry-run "$WORKSPACE" "review deploy na VPS a bezpečnostní rizika")"
+  ROUTE_DOCTOR="$("$ROOT/scripts/route-task.sh" --dry-run "$WORKSPACE" "spusť doctor a zkontroluj setup")"
+  if grep -q "Action:  codex_delegate" <<< "$ROUTE_IMPL" \
+    && grep -q "Codex:   full" <<< "$ROUTE_FULL" \
+    && grep -q "Action:  claude_review" <<< "$ROUTE_REVIEW" \
+    && grep -q "Action:  local_doctor" <<< "$ROUTE_DOCTOR"; then
+    echo "  PASS — router selected expected paths"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL — router did not select expected paths"
+    FAIL=$((FAIL + 1))
+    [ "$MODE" = "router" ] && exit 5
+  fi
+fi
+
 if [ "$MODE" = "all" ] || [ "$MODE" = "codex" ]; then
   echo
-  echo "[1/2] Codex roundtrip (lean mode)"
+  echo "[2/3] Codex roundtrip (lean mode)"
   if AI_BRIDGE_CODEX_MODE=lean "$ROOT/scripts/delegate-to-codex.sh" \
        "$WORKSPACE" \
        "Vrať jednu větu: 'codex bridge OK'. Nic neměň." \
@@ -86,7 +109,7 @@ fi
 
 if [ "$MODE" = "all" ] || [ "$MODE" = "claude" ]; then
   echo
-  echo "[2/2] Claude review roundtrip"
+  echo "[3/3] Claude review roundtrip"
   if "$ROOT/scripts/ask-claude-review.sh" \
        "$WORKSPACE" \
        "Vrať jednu větu: 'claude review OK'. Nic neměň." \

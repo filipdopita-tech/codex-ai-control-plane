@@ -42,6 +42,13 @@ Nepouštět dvě AI do nekonečné debaty. Používat je jako dvě role nad stej
 # Bridge: po Codexu zpátky na Claude review
 ./ai-control-plane/scripts/ask-claude-review.sh /path/to/project "review otázka"
 
+# Bridge: strategická otázka do Claude bez implementačního běhu
+./ai-control-plane/scripts/ask-claude-strategy.sh /path/to/project "strategická otázka"
+
+# Router: automaticky vybere Codex lean/full nebo Claude gate
+./ai-control-plane/scripts/route-task.sh /path/to/project "volně popsaný úkol"
+./ai-control-plane/scripts/route-task.sh --dry-run /path/to/project "jen ukaž trasu"
+
 # Ruční tvorba handoffu (bez execute)
 ./ai-control-plane/scripts/handoff.sh codex|claude /path/to/project "zadání"
 ```
@@ -68,6 +75,17 @@ Cost rules:
   - Nikdy: review po každé malé změně
   - Nikdy: secrets v handoff promptu
 ```
+
+Praktický vstupní bod pro tento strom je `route-task.sh`. Ten vezme volný task,
+načte projektový profil z `projects.json`, vytvoří audit routing rozhodnutí,
+vybere trasu, vypíše důvod rozhodnutí a potom zavolá existující bridge:
+
+- lokální diagnostika / údržba -> `doctor.sh` nebo `update-core.sh`
+- implementace, refaktor, testy, build, skripty -> Codex lean
+- implementace s Google/MCP/browser/cloud/tooling kontextem -> Codex full
+- riziková implementace -> Codex a následně Claude review
+- review, security, deploy, production, VPS, secrets, approval -> Claude gate
+- strategie, architektura, roadmapa, vysvětlení bez editace -> Claude strategy
 
 `update-core.sh` je top-tier update workflow pro jádro AI pracovního prostředí: Google Cloud SDK komponenty, VS Code AI/cloud rozšíření, plný `brew upgrade --greedy`, `brew autoremove`, cleanup a následný doctor report.
 

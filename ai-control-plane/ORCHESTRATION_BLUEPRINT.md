@@ -16,9 +16,13 @@ Postavit z Codexu a Claude Code jeden praktický pracovní systém:
 User
   |
   v
+route-task.sh / routing layer
+  |
+  | codex lean/full OR claude review/strategy
+  v
 Claude Code / strategy layer
   |
-  | structured handoff
+  | structured handoff when needed
   v
 ai-control-plane / handoff files
   |
@@ -33,6 +37,29 @@ Claude/Codex review + deploy decision
 ```
 
 ## Konkrétní napojení Claude -> Codex
+
+Primární vstupní bod pro volně popsané úkoly:
+
+```bash
+./ai-control-plane/scripts/route-task.sh /path/to/project "úkol"
+```
+
+Router používá konzervativní scoring podle signálů v tasku a profilu projektu:
+
+- lokální diagnostika/údržba -> doctor/update-core bez AI běhu
+- editace/testy/build/refaktor -> Codex lean
+- Google/MCP/browser/cloud/tooling -> Codex full
+- riziková implementace -> Codex a potom Claude review
+- deploy/security/produkce/VPS/secrets/review -> Claude gate
+- strategie/architektura/roadmapa/vysvětlení -> Claude strategy
+
+Každé rozhodnutí zapisuje audit soubor do `ai-control-plane/handoffs/`.
+
+Pro kontrolu bez spuštění:
+
+```bash
+./ai-control-plane/scripts/route-task.sh --dry-run /path/to/project "úkol"
+```
 
 Claude může přes Bash spustit:
 
