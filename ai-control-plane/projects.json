@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "generated_by": "manual-initial-audit",
+  "workspace_root": "/Users/filipdopita/Desktop/Codex",
+  "core_projects": [
+    {
+      "name": "Codex control workspace",
+      "path": "/Users/filipdopita/Desktop/Codex",
+      "role": "central AI control plane and handoff workspace",
+      "codex_ready": true,
+      "claude_ready": true
+    },
+    {
+      "name": "OneFlow Vault",
+      "path": "/Users/filipdopita/Documents/OneFlow-Vault",
+      "role": "knowledge base / long-term memory",
+      "codex_ready": false,
+      "claude_ready": true
+    },
+    {
+      "name": "Claude Office",
+      "path": "/Users/filipdopita/Documents/claude-office",
+      "role": "office automation / structured work",
+      "codex_ready": false,
+      "claude_ready": true
+    },
+    {
+      "name": "Website Cloner",
+      "path": "/Users/filipdopita/Documents/website-cloner",
+      "role": "web automation / cloning project",
+      "codex_ready": true,
+      "claude_ready": true
+    },
+    {
+      "name": "CC Best Practice Mining",
+      "path": "/Users/filipdopita/Documents/cc-best-practice-mining",
+      "role": "Claude/Codex best-practice mining",
+      "codex_ready": true,
+      "claude_ready": true
+    },
+    {
+      "name": "Scripts",
+      "path": "/Users/filipdopita/scripts",
+      "role": "automation, VPS, health, social, research scripts",
+      "codex_ready": true,
+      "claude_ready": true
+    }
+  ],
+  "policy": {
+    "default_codex_sandbox": "workspace-write",
+    "default_approval_policy": "never_for_local_bounded_tasks",
+    "cloud_or_vps_changes": "plan_dry_run_before_apply",
+    "secrets": "never_copy_into_handoff_files"
+  }
+}
+
