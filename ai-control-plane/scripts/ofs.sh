@@ -549,6 +549,17 @@ COMMANDS
     notify "msg"        push ntfy notification to phone (no LLM)
     telegram-activate   show Telegram gateway activation steps (after Filip creates bot)
 
+  10/10 power layer
+    do "task"           smart intent router (auto-pick: codex/claude/dispatch/capture/...)
+    brain "query"       cross-context search (memory + vault + handoffs + git + audit)
+    gate [path]         pre-deploy gate (secrets + shell hazards + brand + git + structure)
+    heal [--dry-run]    self-heal layer — detect+restart down services + ntfy
+    metrics [--days N]  performance dashboard from real audit logs
+    capture "text"      quick-save → Obsidian inbox + log (--tag idea|todo|insight)
+    brand FILE          OneFlow voice audit (banned words + AI tells)
+    eval FILE [--type]  auto-eval high-stakes copy (outreach|content|dd|sales|generic)
+    swap [--auto]       Mac memory pressure check + offload suggestions
+
   Help
     help, -h, --help    this message
 
@@ -560,14 +571,21 @@ PATHS
   Use "--here" or absolute path to override
 
 SHORTCUTS
-  ofs status            (most common)
-  ofs route --here "fix tests in this repo"
-  ofs delegate ~/Documents/website-cloner "refactor cron handler"
+  ofs status                              (most common)
+  ofs do "implement webhook handler"      (smart router picks Codex)
+  ofs do "uložit nápad: weekly newsletter" (smart router picks capture)
+  ofs heal                                (services down → restart + ntfy)
+  ofs gate                                (before commit/deploy)
+  ofs eval --type outreach draft.md       (high-stakes copy gate)
+  ofs brain "DD Patricny"                 (cross-context search)
+  ofs swap --auto                         (Mac swap >70% → relief)
 
 EOF
 }
 
 # ─── DISPATCH ──────────────────────────────────────────────────────────
+LIB_DIR="$ROOT/scripts/lib"
+
 case "${1:-help}" in
   status|s)    shift; cmd_status "$@" ;;
   route|r)     shift; cmd_route "$@" ;;
@@ -585,6 +603,16 @@ case "${1:-help}" in
   dispatch|disp)            shift; cmd_dispatch "$@" ;;
   notify|n)                 shift; cmd_notify "$@" ;;
   telegram-activate|tg)     shift; cmd_telegram_activate "$@" ;;
+  # ─── 10/10 power layer (added 2026-05-02 wave 3) ───
+  do)          shift; exec "$LIB_DIR/ofs-do.sh" "$@" ;;
+  brain|bra)   shift; exec "$LIB_DIR/ofs-brain.sh" "$@" ;;
+  gate|g)      shift; exec "$LIB_DIR/ofs-gate.sh" "$@" ;;
+  heal)        shift; exec "$LIB_DIR/ofs-heal.sh" "$@" ;;
+  metrics|met) shift; exec "$LIB_DIR/ofs-metrics.sh" "$@" ;;
+  capture|cap) shift; exec "$LIB_DIR/ofs-capture.sh" "$@" ;;
+  brand|b)     shift; exec "$LIB_DIR/ofs-brand.sh" "$@" ;;
+  eval|e)      shift; exec "$LIB_DIR/ofs-eval.sh" "$@" ;;
+  swap)        shift; exec "$LIB_DIR/ofs-swap.sh" "$@" ;;
   help|-h|--help) cmd_help ;;
   *)           color red "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac
