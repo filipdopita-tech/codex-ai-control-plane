@@ -27,3 +27,6 @@ gstack-runs/
 
 # External repo mirrors (large clones, regenerable)
 external-mirrors/
+
+# Embedded git repo from D4Vinci cherry-pick (2026-05-03)
+D4Vinci-cherry-pick/Cr3dOv3r/
