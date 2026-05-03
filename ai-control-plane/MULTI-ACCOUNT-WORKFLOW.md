@@ -231,6 +231,34 @@ ofs mobile-flash ecosystem-info               # show MANIFEST.md + last sync ts
 
 Změnit → uložit → `ofs mobile-flash sync-ecosystem` → phone session vidí změnu okamžitě (next tool call, kdy se rules znovu načítají).
 
+## iPhone bidirectional bridge (2026-05-03)
+
+Plný setup (App Store links + 5-step onboarding + scope tabulka): **`iPhone-SETUP.md`**.
+
+Stručně co máš (Mac → iPhone akce):
+
+```bash
+ofs imsg "rychlá zpráva pro mě"           # iMessage banner + vibrace na všech iDevicích
+ofs icloud put report.pdf                 # push file → iPhone Files (iCloud Drive)
+ofs icloud note "stěžejní rozhodnutí"     # text note → iPhone Files (timestamp filename)
+ofs icloud list                            # ls Claude-Inbox
+ofs pushcut "Title" "Subtitle"            # push notif (po setup creds)
+ofs pushcut --speak "Mluvený text"        # Claude mluví na iPhone (audio)
+ofs pushcut --url https://claude.ai/code  # open URL na iPhone
+ofs pushcut --shortcut "DispatchToFlash"  # trigger iOS Shortcut
+ofs notify "msg" --priority high          # ntfy push (existing)
+```
+
+iPhone → Mac/Flash akce (full Claude access):
+
+| Cesta | Co umíš |
+|---|---|
+| Claude iOS app → "Filip Flash" session | full chat, files, MCP, sub-agents (parita s VS Studio) |
+| Siri Shortcut "Hey Siri, Dispatch" | voice → Hermes webhook → Claude session na Flash |
+| ntfy app | live push z Mac/Flash, action buttons |
+
+**Honest scope (Apple iOS sandbox):** Claude NEMÁ přímý read access do iPhone file system / messages / contacts / photos. iOS app sandbox je hard barrier (≠ Mac terminál). Setup nahoře = max bidirectional integration v rámci legálních Apple API.
+
 ## iPhone hardening (Filipova manuální akce, MAX security)
 
 Anthropic OAuth je **account-level**, ne device-level. To znamená: kdokoli s heslem k service accountu může přidat svůj iPhone do session listu. Bezpečnost závisí na disciplíně credentials, ne na device pairingu.

@@ -588,6 +588,16 @@ COMMANDS
     notify "msg"        push ntfy notification to phone (no LLM)
     telegram-activate   show Telegram gateway activation steps (after Filip creates bot)
 
+  iPhone bridges (Mac → Filip's iPhone 15)
+    imsg "text"         send iMessage to Filip (vibrace/banner; AppleScript)
+    icloud put <file>   push file to iPhone Files via iCloud Drive
+    icloud note "msg"   write timestamp note to iCloud Inbox
+    icloud list         list iCloud Inbox contents
+    pushcut "title" "subtitle"   push notif via Pushcut (vyžaduje creds)
+    pushcut --speak "text"       Claude mluví na iPhone (audio)
+    pushcut --url "URL"          open URL na iPhone
+    pushcut --shortcut "Name"    trigger iOS Shortcut
+
   10/10 power layer
     do "task"           smart intent router (auto-pick: codex/claude/dispatch/capture/...)
     brain "query"       cross-context search (memory + vault + handoffs + git + audit)
@@ -655,6 +665,10 @@ case "${1:-help}" in
   brand|b)     shift; exec "$LIB_DIR/ofs-brand.sh" "$@" ;;
   eval|e)      shift; exec "$LIB_DIR/ofs-eval.sh" "$@" ;;
   swap)        shift; exec "$LIB_DIR/ofs-swap.sh" "$@" ;;
+  # ─── iPhone bridges (added 2026-05-03) ───
+  imsg|imessage)    shift; exec "$LIB_DIR/ofs-imsg.sh" "$@" ;;
+  icloud)           shift; exec "$LIB_DIR/ofs-icloud.sh" "$@" ;;
+  pushcut|pc)       shift; exec "$LIB_DIR/ofs-pushcut.sh" "$@" ;;
   help|-h|--help) cmd_help ;;
   *)           color red "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac

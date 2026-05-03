@@ -155,6 +155,8 @@ ofs mobile-flash reauth        # po expiraci OAuth tokenu
 - Launcher: `~/Desktop/Codex/ai-control-plane/scripts/cc-mobile.sh`
 - Wired do: `ofs mobile` (alias) → `cc-mobile.sh`
 - Plný overview všech 3 cest: `MOBILE-DISPATCH.md`
-- ofs help: `ofs help` → sekce Mobile
+- **iPhone bidirectional bridge** (Mac → iPhone akce): `iPhone-SETUP.md`
+- **Multi-account + ekosystém workflow**: `MULTI-ACCOUNT-WORKFLOW.md`
+- ofs help: `ofs help` → sekce Mobile + iPhone bridges
 
 Dopita
