@@ -17,3 +17,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 ai-control-plane/handoffs/*.md
+
+# Handoff folder — credentials, never commit
+handoff-2026-05-03/
+.gstack/
+
+# gstack output artifacts (binaries, regenerable)
+gstack-runs/
