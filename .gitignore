@@ -24,3 +24,6 @@ handoff-2026-05-03/
 
 # gstack output artifacts (binaries, regenerable)
 gstack-runs/
+
+# External repo mirrors (large clones, regenerable)
+external-mirrors/
