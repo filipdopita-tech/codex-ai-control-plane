@@ -1,0 +1,43 @@
+groups:
+  - name: oneflow_p0
+    interval: 30s
+    rules:
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|fuse.*"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|fuse.*"}) < 0.10
+        for: 10m
+        labels: { severity: critical, runbook: disk-space }
+        annotations:
+          summary: "Flash disk </10% free on / ({{ $value | humanizePercentage }})"
+          description: "Filesystem / on flash has <10% available. Run df -h, prune docker images / journalctl --vacuum, oneflow backups older than 7d."
+
+      - alert: MemoryHigh
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+        for: 10m
+        labels: { severity: warning, runbook: memory }
+        annotations:
+          summary: "Flash memory available <10% ({{ $value | humanizePercentage }})"
+          description: "Available RAM dropped below 10%. Check `docker stats` for runaway containers, `journalctl -p 3 -n 100` for OOM kills."
+
+      - alert: HostDown
+        expr: up{job="node"} == 0
+        for: 2m
+        labels: { severity: critical, runbook: host-down }
+        annotations:
+          summary: "node-exporter unreachable on {{ $labels.instance }} (host likely down)"
+          description: "node-exporter scrape failed for >2m. SSH to flash, check systemctl, network."
+
+      - alert: ContainerRestartLoop
+        expr: increase(container_start_time_seconds[15m]) > 3
+        for: 5m
+        labels: { severity: warning, runbook: container-loop }
+        annotations:
+          summary: "Container {{ $labels.name }} restarted >3× in 15m"
+          description: "Look for crash logs: `docker logs {{ $labels.name }} --tail 200`."
+
+      - alert: BackupStale
+        expr: time() - max(node_filesystem_files_free{mountpoint="/var/backups"}) > 0 and (time() - node_systemd_unit_state{name="oneflow-backup.service",state="active"} > 90000) or absent(node_systemd_unit_state{name="oneflow-backup.service"})
+        for: 10m
+        labels: { severity: critical, runbook: backup-stale }
+        annotations:
+          summary: "OneFlow backup hasn't run in >25h"
+          description: "Last successful backup is older than 25h. Check `journalctl -u oneflow-backup.service -n 50` and `systemctl status oneflow-backup.timer`."
