@@ -23,9 +23,43 @@ for d in oneflow.cz of-fund.cz hala-tower.cz patricny-park.cz nebulee.cz; do
   elif [[ "$txt" == *"v=DMARC1"* ]]; then
     log_warn "$d DMARC present but not p=reject ($txt)"
   else
-    log_fail "$d DMARC missing"
+    # Sister domains: check if registered in Cloudflare yet
+    ns=$(dig +short NS $d @1.1.1.1 2>/dev/null | head -1)
+    if [[ "$ns" == *"ns.nic.cz"* || -z "$ns" ]]; then
+      log_warn "$d not yet on Cloudflare (NS still registry-only) — Block 4.1+4.3 pending Filip-side"
+    else
+      log_fail "$d DMARC missing (NS=$ns, run cloudflare-publish-sister-dmarc.sh)"
+    fi
   fi
 done
+
+echo "=== Block 4 — DNSSEC DS at registrar (Wedos) ==="
+for d in oneflow.cz of-fund.cz hala-tower.cz patricny-park.cz nebulee.cz; do
+  ds=$(dig +short DS $d @1.1.1.1 2>/dev/null | head -1)
+  if [[ -n "$ds" ]]; then
+    log_pass "$d DNSSEC DS at registry ($ds)"
+  else
+    log_warn "$d DNSSEC DS not at registry (paste DS at Wedos panel)"
+  fi
+done
+
+echo "=== ntfy + dispatch end-to-end ==="
+ntfy_http=$(curl -s -o /dev/null -w "%{http_code}" "https://ntfy.oneflow.cz" 2>/dev/null)
+if [[ "$ntfy_http" == "200" ]]; then
+  log_pass "ntfy.oneflow.cz HTTP 200"
+else
+  log_fail "ntfy.oneflow.cz HTTP $ntfy_http"
+fi
+dispatch_secret='MqUZxwQeKN8Lm0LzkNMxvhHt7ay13nyhfd7tnLHRezc'
+dispatch_body='{"prompt":"verify-finish-list dispatch sanity"}'
+dispatch_sig=$(printf '%s' "$dispatch_body" | openssl dgst -sha256 -hmac "$dispatch_secret" -hex 2>/dev/null | awk '{print $NF}')
+dispatch_http=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://dispatch.oneflow.cz/webhooks/dispatch \
+  -H "Content-Type: application/json" -H "X-Hub-Signature-256: sha256=$dispatch_sig" -d "$dispatch_body" 2>/dev/null)
+if [[ "$dispatch_http" == "202" || "$dispatch_http" == "200" ]]; then
+  log_pass "dispatch.oneflow.cz HMAC accepted (HTTP $dispatch_http)"
+else
+  log_fail "dispatch.oneflow.cz HTTP $dispatch_http"
+fi
 
 echo "=== Block 5.1 — ofs notify ==="
 if /Users/filipdopita/.local/bin/ofs notify "verify-finish-list smoke $(date -u +%H:%M:%SZ)" >/dev/null 2>&1; then
