@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily PG flash-side standby refresh (after main backup)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=20m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

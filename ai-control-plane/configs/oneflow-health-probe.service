@@ -1,0 +1,11 @@
+[Unit]
+Description=OneFlow health probe (structured JSON logs to Loki + textfile metrics)
+Documentation=file:///usr/local/bin/oneflow-health-probe.py
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/bin/oneflow-health-probe.py
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=120

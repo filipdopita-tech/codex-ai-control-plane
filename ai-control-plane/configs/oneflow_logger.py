@@ -74,9 +74,20 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False)
 
 
-def get_logger(name: str = "oneflow", **default_extras) -> logging.LoggerAdapter:
+class _MergeAdapter(logging.LoggerAdapter):
+    """LoggerAdapter that merges default extras with per-call extras instead of overwriting."""
+
+    def process(self, msg, kwargs):
+        extra = dict(self.extra or {})
+        if "extra" in kwargs and kwargs["extra"]:
+            extra.update(kwargs["extra"])
+        kwargs["extra"] = extra
+        return msg, kwargs
+
+
+def get_logger(name: str = "oneflow", **default_extras) -> _MergeAdapter:
     """
-    Returns a LoggerAdapter that injects default extras into every record.
+    Returns a logger that merges (not overwrites) per-call extras with defaults.
     Idempotent — adding handlers twice is avoided by checking existing ones.
     """
     base = logging.getLogger(name)
@@ -97,9 +108,9 @@ def get_logger(name: str = "oneflow", **default_extras) -> logging.LoggerAdapter
                 fh.setFormatter(JSONFormatter())
                 base.addHandler(fh)
         except OSError:
-            pass  # /var/log/oneflow unwritable -> skip file sink, stdout still works
+            pass
 
-    return logging.LoggerAdapter(base, default_extras)
+    return _MergeAdapter(base, default_extras)
 
 
 # Convenience singleton

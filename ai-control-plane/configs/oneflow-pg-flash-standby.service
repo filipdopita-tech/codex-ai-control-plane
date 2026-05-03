@@ -1,0 +1,12 @@
+[Unit]
+Description=OneFlow PostgreSQL flash-side standby refresh (corruption defense)
+Documentation=file:///usr/local/bin/oneflow-pg-flash-standby.sh
+After=oneflow-backup.service docker.service
+Wants=oneflow-backup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/oneflow-pg-flash-standby.sh
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal
