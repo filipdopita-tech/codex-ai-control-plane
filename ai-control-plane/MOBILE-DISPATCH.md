@@ -1,11 +1,95 @@
-# Mobile Dispatch — z telefonu spustíš task na VPS
+# Mobile Dispatch — telefon = full Claude Code session
 
-> Wave 2 deliverable. Status: **LIVE** od 2026-05-02 21:50 CEST.
-> Endpoint: `https://dispatch.oneflow.cz/webhooks/dispatch`
+> Status: **LIVE** od 2026-05-02 (Hermes webhook) + **2026-05-03 (native RC)**.
+> 3 cesty od full IDE-grade kontroly po one-shot push.
 
-## Co to dělá
+## Tři cesty (vyber podle úkolu)
 
-Pošleš HTTP POST z telefonu (nebo jakéhokoli zařízení), Hermes Agent na Flash VPS spustí task v Claude session, výsledek loguje do `/root/.hermes/logs/agent.log`. Volitelně může výsledek doručit zpátky přes Telegram/Slack/Discord/email (config: `--deliver` při subscribe).
+| # | Cesta | Trigger | Co vidíš | Setup |
+|---|---|---|---|---|
+| 1 | **Native Remote Control** (PRIMARY) | `ofs mobile` na Mac | full session, real-time chat, files, MCPs | Anthropic Claude app + scan QR (~30s) |
+| 2 | **Hermes webhook** | curl/Shortcuts POST | log výstup (no real-time) | HMAC + iOS Shortcuts (~3 min) |
+| 3 | **ntfy push** | `ofs notify` | jen notifikace | ntfy iOS app (~1 min) |
+
+## 1) Native Remote Control (RC) — VS Studio-grade z phone
+
+> Anthropic feature (research preview, únor 2026). Vyžaduje Claude Code v2.1.51+ (instalováno: 2.1.126). Dostupné na Pro/Max/Team/Enterprise plans, **NE pro API-key auth**.
+
+### Co to dělá
+
+Claude Code session běží na tvém Macu (nebo Flash VPS). Z iPhone se připojíš přes Anthropic API relay (outbound HTTPS only, žádné inbound porty). Vidíš stejnou session, stejné files, stejné MCP servery, můžeš psát zprávy z phone i z terminálu naráz — sync v reálném čase. Survival: pokud Mac usne nebo padne network <10 min, session se reconnectne sama.
+
+### Quickstart
+
+```bash
+# 1. Stáhni Claude app na iPhone (jednorázově)
+#    App Store: "Claude by Anthropic"
+#    https://apps.apple.com/us/app/claude-by-anthropic/id6473753684
+#    Login: stejný Anthropic Max account jako Claude Code
+
+# 2. Spusť RC session na Macu
+ofs mobile                    # default: Codex root
+ofs mobile --here             # aktuální $PWD
+ofs mobile --interactive      # terminál + remote naráz
+ofs mobile /path "Title"      # explicit project + custom session title
+
+# 3. Stiskni MEZERNÍK v terminálu → zobrazí QR
+# 4. V Claude iOS app: scan QR
+# 5. Hotovo — píšeš z phone, vidíš z Macu, plný control
+```
+
+### Push notifikace (volitelné, doporučené)
+
+```bash
+# V běžící session (terminál nebo phone):
+/config
+# → "Push when Claude decides" → toggle ON
+```
+
+Claude pak automaticky pingne phone když:
+- dlouhý task dokončí
+- potřebuje rozhodnutí (HARD-STOP zone)
+- explicit `notify me when X` v promptu
+
+### RC z VPS Flash (always-on bonus)
+
+Filip běžně používá Mac, ale když je daleko (cesta, sleep, restart), RC umírá. Pro persistent session:
+
+```bash
+# Jednorázový setup na Flash (vyžaduje browser flow pro /login):
+ssh root@10.77.0.1
+tmux new -s claude-rc
+cd /root/workspace
+claude              # první run → /login → claude.ai OAuth (open URL na phone)
+# → po loginu Ctrl-D, pak:
+claude remote-control --name "Filip Flash" --spawn worktree
+# Ctrl-b d (detach tmux). Session běží 24/7.
+# Reattach: tmux attach -t claude-rc
+```
+
+Limity:
+- Trvalé poll → minimální RAM use (~150MB Flash má dost)
+- Worktree spawn = každý mobile request = vlastní git checkout (no conflict)
+- Po síťovém výpadku >10 min → session umírá, restart manual
+- RC nepodporuje API key auth (Filip Max OAuth = OK)
+
+### Bezpečnost RC
+
+- **Outbound HTTPS only** — žádné inbound porty na Mac/Flash
+- **Žádné files do cloudu** — filesystem zůstává lokální
+- **Anthropic API jako relay** — TLS, multiple short-lived credentials
+- **HARD-STOP zone respected** — RC sessions dědí všechna pravidla z `~/.claude/CLAUDE.md`
+
+### Limitace RC
+
+- Local-only commands z phonu nejedou: `/mcp`, `/plugin`, `/resume` (interactive pickers)
+- Ultraplan disconnects RC (nelze běžet souběžně)
+- 1 RC session per claude proces (server mode podporuje multi)
+- Pokud zavřeš terminál nebo padne `claude` proces → session končí
+
+## 2) Hermes webhook — one-shot dispatch (no terminal needed)
+
+Použij když nemáš zapnutý Mac/Flash terminál a chceš jen poslat task. Výstup nejde do real-time chatu, ale do logu.
 
 ## Architektura
 

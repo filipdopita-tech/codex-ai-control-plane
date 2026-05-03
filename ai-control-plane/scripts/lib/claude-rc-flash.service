@@ -1,0 +1,31 @@
+[Unit]
+Description=Claude Code Remote Control (always-on session for Filip's phone)
+Documentation=https://code.claude.com/docs/en/remote-control
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/workspace-rc
+Environment=HOME=/root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# RC requires full-scope OAuth (NOT API key, NOT setup-token)
+Environment=ANTHROPIC_API_KEY=
+# Inherit Filip's full ecosystem (CLAUDE.md, rules/, knowledge/, expertise/, skills/, agents/, commands/)
+# Primary: local mirror on Flash (/root/.claude-ecosystem) — synced from Mac via sync-ecosystem-to-flash.sh
+# Fallback: SSHFS Mac mount (/mac/.claude) — used when local mirror missing or stale
+# Resilience: phone session ekosystém survives Mac sleep / network drop / SSHFS unmount
+Environment=CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=/root/.claude-ecosystem
+# stdin trick: feed 'y' to auto-confirm "Enable Remote Control?" prompt + keep stdin open via sleep infinity
+ExecStart=/bin/bash -c 'exec /usr/bin/claude remote-control --name "Filip Flash" --spawn worktree --capacity 8 < <(printf "y\n"; sleep infinity)'
+Restart=always
+RestartSec=15
+KillMode=process
+TimeoutStopSec=20
+StandardOutput=append:/var/log/claude-rc.log
+StandardError=append:/var/log/claude-rc.log
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>cz.oneflow.flash-ecosystem-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-lc</string>
+        <string>/Users/filipdopita/Desktop/Codex/ai-control-plane/scripts/sync-ecosystem-to-flash.sh &gt;&gt; /Users/filipdopita/.claude/logs/sync-ecosystem-launchd.log 2&gt;&amp;1</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>2</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/filipdopita/.claude/logs/sync-ecosystem-launchd.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/filipdopita/.claude/logs/sync-ecosystem-launchd.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/filipdopita</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/filipdopita/Desktop/Codex/ai-control-plane</string>
+</dict>
+</plist>

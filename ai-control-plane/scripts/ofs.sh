@@ -342,37 +342,65 @@ cmd_handoff() {
 
 cmd_phone() {
   cat <<'EOF'
-Phone control plane (mobile dispatcher):
+Phone control plane — 3 cesty od nejjednodušší k nejmocnější:
 
-ACTIVE: Hermes webhook gateway (HTTPS + HMAC)
-  Endpoint:  https://dispatch.oneflow.cz/webhooks/{dispatch,status}
-  Method:    POST + Content-Type: application/json
-  Body:      {"body":"<your task>"}
-  Auth:      X-Hub-Signature-256: sha256=<HMAC-SHA256(body, route_secret)>
-  Secrets:   /root/.credentials/hermes-webhook.env (per-route in webhook_subscriptions.json)
+═══ 1) PRIMARY: Native Claude Code Remote Control (RC) ═══════════════
+Anthropic feature, vyžaduje Claude Code v2.1.51+ (máš 2.1.126 ✓).
+Plný VS Studio-grade přístup z iPhone — same files, same MCPs, same context.
 
-Helpers from Mac:
-  ofs dispatch "task here"      send dispatch (auto-fetches secret via SSH)
-  ofs notify   "msg" [priority] push ntfy notification to phone (no LLM call)
+  ofs mobile                   # spustí RC server v Codex root
+  ofs mobile --here            # RC server v aktuálním PWD
+  ofs mobile --interactive     # interaktivní (terminál + remote naráz)
+  ofs mobile /path "Title"     # explicit project + custom title
 
-iPhone Shortcuts (one-time setup, ~3 min):
-  1. Open Shortcuts app → Create Shortcut
-  2. Add action: "Get Contents of URL"
-     URL: https://dispatch.oneflow.cz/webhooks/dispatch
-     Method: POST
-     Headers: X-Hub-Signature-256 (use secret from RECOVERY-VPS-FLASH or run: ofs dispatch --show-secret)
-     Body: JSON {"body":"<Ask for input>"}
-  3. Save as "Dispatch to Flash"
-  4. Add to Home Screen + Siri trigger ("Hey Siri, Dispatch")
+Po spuštění:
+  → MEZERNÍK pro QR kód
+  → Claude iOS app (App Store: "Claude by Anthropic") → scan QR
+  → /config v session → "Push when Claude decides" pro notifikace
 
-Telegram (optional 1-click activate, see telegram-setup.md):
-  Status: scaffold ready. Filip vytvoří bot v @BotFather (~3 min) → ofs telegram-activate
+Bezpečnost: outbound HTTPS only, žádné inbound porty, files zůstávají na Macu.
 
-ntfy push (already working):
-  ntfy.oneflow.cz (subscribe in ntfy iOS app, topic: Filip)
-  Triggered by: ofs notify, resource-monitor alerts, security-audit weekly
+═══ 2) WEBHOOK: Hermes dispatch (one-shot, no terminal) ═════════════════
+Použij když nemáš zapnutý Mac/Flash terminál a chceš jen poslat task:
+
+  ofs dispatch "task here"     send free-form task → Claude Opus
+  ofs dispatch --status        request system status
+  ofs dispatch --show-secret   HMAC secret pro iPhone Shortcuts
+
+Endpoint:  https://dispatch.oneflow.cz/webhooks/dispatch
+Auth:      X-Hub-Signature-256 (per-route HMAC-SHA256)
+Output:    /root/.hermes/logs/agent.log (no real-time chat)
+
+═══ 3) NOTIFIKACE: ntfy push (out-of-band alerts) ═════════════════════
+  ofs notify "msg" [priority]  push notification (no LLM)
+  Subscribe: ntfy iOS app → topic "Filip" → server ntfy.oneflow.cz
+
+═══ Telegram (optional secondary path) ════════════════════════════════
+  ofs telegram-activate        návod (vyžaduje 3-min BotFather setup)
+
+Plný overview: cat /Users/filipdopita/Desktop/Codex/ai-control-plane/MOBILE-DISPATCH.md
 EOF
   log "phone" "info" ""
+}
+
+# Native Claude Code Remote Control launcher (delegates to cc-mobile.sh)
+cmd_mobile() {
+  # Special case: --flash routes to persistent VPS RC control
+  if [ "${1:-}" = "--flash" ] || [ "${1:-}" = "flash" ]; then
+    shift
+    exec "$ROOT/scripts/flash-rc-control.sh" "$@"
+  fi
+  exec "$ROOT/scripts/cc-mobile.sh" "$@"
+}
+
+# Always-on RC on Flash VPS (persistent, systemd auto-restart)
+cmd_mobile_flash() {
+  exec "$ROOT/scripts/flash-rc-control.sh" "$@"
+}
+
+# One-time setup orchestrator (browser login + systemd deploy)
+cmd_mobile_flash_setup() {
+  exec bash "$ROOT/scripts/flash-rc-setup.sh" "$@"
 }
 
 # Dispatch a task to Hermes webhook gateway (mobile/remote dispatch)
@@ -542,8 +570,19 @@ COMMANDS
     logs [N]            tail ofs audit log (default 30)
 
   Mobile
-    phone               phone control plane info / setup status
-    dispatch "task"     POST task to https://dispatch.oneflow.cz/webhooks/dispatch (HMAC)
+    mobile              native Claude Code RC on Mac (VS Studio-grade, ad-hoc)
+    mobile --here       RC server v aktuálním $PWD
+    mobile --interactive RC + interaktivní terminál naráz
+    mobile-flash-setup  ONE-TIME: browser login + deploy systemd unit on Flash
+    mobile-flash status persistent Flash RC: status / logs / restart / stop / reauth
+    mobile-flash logs   tail Flash RC log
+    mobile-flash restart restart persistent RC service
+    mobile-flash url    extract session URL from log
+    mobile-flash sync-ecosystem  mirror Mac ~/.claude → Flash /root/.claude-ecosystem
+    mobile-flash ecosystem-info  show ecosystem manifest + last sync timestamp
+    mobile-flash check-auth      manual OAuth health check (cron runs 6h auto)
+    phone               phone control plane info / 3 paths overview
+    dispatch "task"     webhook one-shot dispatch (HTTPS + HMAC, no terminal needed)
     dispatch --status   request system status from VPS (LLM agent)
     dispatch --show-secret   reveal HMAC secret for iPhone Shortcuts setup
     notify "msg"        push ntfy notification to phone (no LLM)
@@ -600,6 +639,9 @@ case "${1:-help}" in
   handoff)     shift; cmd_handoff "$@" ;;
   logs|l)      shift; cmd_logs "$@" ;;
   phone|p)     shift; cmd_phone "$@" ;;
+  mobile|mob)  shift; cmd_mobile "$@" ;;
+  mobile-flash|flash-rc) shift; cmd_mobile_flash "$@" ;;
+  mobile-flash-setup|flash-rc-setup) shift; cmd_mobile_flash_setup "$@" ;;
   dispatch|disp)            shift; cmd_dispatch "$@" ;;
   notify|n)                 shift; cmd_notify "$@" ;;
   telegram-activate|tg)     shift; cmd_telegram_activate "$@" ;;
