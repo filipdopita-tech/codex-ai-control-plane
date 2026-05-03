@@ -20,7 +20,7 @@
 
 | Priority | Akce | Business | Status | Deadline | Owner |
 |---|---|---|---|---|---|
-| P1 | ECSP compliance gap analysis OneFlow | OneFlow | [ ] | T+14 dní | Claude + Filip |
+| P1 | ECSP compliance gap analysis OneFlow | OneFlow | [~] | T+14 dní | Claude + Filip |
 | P1 | CIAD Manifest v1.0 draft | CIAD | [ ] | T+14 dní | Claude (ghostwriter) + Filip |
 | P1 | Personal brand pivot prompt + 3 keynote applications | Cross | [ ] | T+10 dní | Claude + Filip |
 | P2 | First CIAD paper "Mech Interp for Policy Makers" outline + draft | CIAD | [ ] | T+30 dní | Claude (research+draft) + Filip (review) |
