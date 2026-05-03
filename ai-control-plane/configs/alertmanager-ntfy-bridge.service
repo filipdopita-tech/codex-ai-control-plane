@@ -1,0 +1,16 @@
+[Unit]
+Description=Alertmanager → ntfy bridge (formats alerts + adds Bearer auth)
+After=network-online.target
+
+[Service]
+Type=simple
+Environment=LISTEN_PORT=9094
+Environment=SOPS_AGE_KEY_FILE=/root/.config/sops/age/keys.txt
+ExecStart=/usr/local/bin/sops-load.sh exec /root/.credentials/master.sops.env /usr/bin/python3 /usr/local/bin/alertmanager-ntfy-bridge.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

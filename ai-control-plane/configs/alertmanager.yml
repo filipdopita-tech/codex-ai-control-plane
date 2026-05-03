@@ -16,7 +16,7 @@ route:
 receivers:
   - name: ntfy-default
     webhook_configs:
-      - url: https://ntfy.oneflow.cz/Filip-alerts
+      - url: http://172.30.0.1:9094/alert
         send_resolved: true
         max_alerts: 0
         http_config:
@@ -24,7 +24,7 @@ receivers:
 
   - name: ntfy-critical
     webhook_configs:
-      - url: https://ntfy.oneflow.cz/Filip-alerts
+      - url: http://172.30.0.1:9094/alert
         send_resolved: true
         max_alerts: 0
         http_config:

@@ -34,10 +34,10 @@ groups:
           summary: "Container {{ $labels.name }} restarted >3× in 15m"
           description: "Look for crash logs: `docker logs {{ $labels.name }} --tail 200`."
 
-      - alert: BackupStale
-        expr: time() - max(node_filesystem_files_free{mountpoint="/var/backups"}) > 0 and (time() - node_systemd_unit_state{name="oneflow-backup.service",state="active"} > 90000) or absent(node_systemd_unit_state{name="oneflow-backup.service"})
+      - alert: HighIOWait
+        expr: avg by(instance) (rate(node_cpu_seconds_total{mode="iowait"}[5m])) * 100 > 30
         for: 10m
-        labels: { severity: critical, runbook: backup-stale }
+        labels: { severity: warning, runbook: io-wait }
         annotations:
-          summary: "OneFlow backup hasn't run in >25h"
-          description: "Last successful backup is older than 25h. Check `journalctl -u oneflow-backup.service -n 50` and `systemctl status oneflow-backup.timer`."
+          summary: "High IO wait on {{ $labels.instance }} ({{ $value | printf \"%.1f\" }}%)"
+          description: "CPU spent >30% in iowait for 10m. Suspect: backup running, disk saturation, swap thrashing. Check `iostat -x 5`, `iotop`."
