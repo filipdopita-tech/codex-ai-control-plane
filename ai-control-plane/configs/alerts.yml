@@ -34,6 +34,22 @@ groups:
           summary: "Container {{ $labels.name }} restarted >3× in 15m"
           description: "Look for crash logs: `docker logs {{ $labels.name }} --tail 200`."
 
+      - alert: BackupStale
+        expr: time() - oneflow_backup_last_success_timestamp_seconds > 90000
+        for: 10m
+        labels: { severity: critical, runbook: backup-stale }
+        annotations:
+          summary: "OneFlow backup hasn't succeeded in {{ $value | humanizeDuration }}"
+          description: "Last successful backup is older than 25h. journalctl -u oneflow-backup.service -n 50; systemctl status oneflow-backup.timer; check /var/log/oneflow-backup.log."
+
+      - alert: BackupOffsiteSyncFailed
+        expr: oneflow_backup_offsite_synced == 0
+        for: 30m
+        labels: { severity: warning, runbook: backup-offsite }
+        annotations:
+          summary: "Last backup did not sync to Mac off-site"
+          description: "rsync to filipdopita@10.77.0.2 failed and SSHFS fallback also failed. Backup is local-only on Flash. Check WG connection, Mac SSH availability."
+
       - alert: HighIOWait
         expr: avg by(instance) (rate(node_cpu_seconds_total{mode="iowait"}[5m])) * 100 > 30
         for: 10m

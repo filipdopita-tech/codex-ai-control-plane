@@ -19,6 +19,9 @@ RETENTION_MAC_DAYS=30
 AGE_RECIPIENT="age1kdwk247yuxsx5rxtel32j2ksz6pc9vk40c5cf7c3zkyduxzxf3yqv5clcd"
 AGE_KEY_FILE=/root/.config/sops/age/keys.txt
 MAC_TARGET=/mac/Documents/oneflow-backups
+MAC_RSYNC_TARGET="filipdopita@10.77.0.2:Documents/oneflow-backups/"
+MAC_SSH_KEY=/root/.ssh/id_ed25519
+TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
 NTFY_URL="https://ntfy.oneflow.cz/Filip"
 START_TS=$(date +%s)
 
@@ -179,13 +182,24 @@ shred -u "$PLAIN_TAR" 2>/dev/null || : > "$PLAIN_TAR"
 rm -rf "$WORK_DIR"  # cleanup unencrypted dir
 log "  encrypted: $ENC_FILE (plain=$PLAIN_SIZE → enc=$ENC_SIZE)"
 
-# ---- 9. Sync to Mac via SSHFS ----
-if [ -d "$MAC_TARGET" ]; then
-  log "rsync to $MAC_TARGET"
-  if rsync -a --partial "$ENC_FILE" "$MAC_TARGET/" 2>>"$LOG_FILE"; then
-    log "  ok: synced to Mac"
+# ---- 9. Sync to Mac (rsync over SSH primary, /mac SSHFS fallback) ----
+SYNC_OK=0
+if ssh -o BatchMode=yes -o ConnectTimeout=5 -i "$MAC_SSH_KEY" filipdopita@10.77.0.2 'mkdir -p Documents/oneflow-backups && echo OK' >/dev/null 2>&1; then
+  log "rsync over SSH -> $MAC_RSYNC_TARGET"
+  if rsync -a --partial --timeout=300 -e "ssh -i $MAC_SSH_KEY -o ConnectTimeout=10" "$ENC_FILE" "$MAC_RSYNC_TARGET" 2>>"$LOG_FILE"; then
+    log "  ok: rsync over SSH"
+    SYNC_OK=1
   else
-    log "  WARN: rsync to Mac failed"
+    log "  WARN: rsync SSH failed (will try SSHFS fallback)"
+  fi
+fi
+if [ "$SYNC_OK" -eq 0 ] && [ -d "$MAC_TARGET" ]; then
+  log "fallback rsync via SSHFS $MAC_TARGET"
+  if rsync -a --partial "$ENC_FILE" "$MAC_TARGET/" 2>>"$LOG_FILE"; then
+    log "  ok: SSHFS fallback"
+    SYNC_OK=1
+  else
+    log "  WARN: SSHFS fallback failed too — backup local-only this run"
   fi
 fi
 
@@ -194,7 +208,28 @@ log "retention prune"
 find "$WORK_ROOT" -maxdepth 1 -name "oneflow-*.tar.age" -mtime +$RETENTION_LOCAL_DAYS -delete 2>/dev/null || true
 [ -d "$MAC_TARGET" ] && find "$MAC_TARGET" -maxdepth 1 -name "oneflow-*.tar.age" -mtime +$RETENTION_MAC_DAYS -delete 2>/dev/null || true
 
-# ---- 11. Notify ----
+# ---- 11. Textfile collector — Prometheus picks this up via node-exporter ----
+mkdir -p "$TEXTFILE_DIR" 2>/dev/null
+ENC_BYTES=$(stat -c %s "$ENC_FILE" 2>/dev/null || echo 0)
+TF_TMP="$TEXTFILE_DIR/oneflow_backup.prom.$$"
+cat > "$TF_TMP" <<EOF
+# HELP oneflow_backup_last_success_timestamp_seconds Unix time of last successful backup
+# TYPE oneflow_backup_last_success_timestamp_seconds gauge
+oneflow_backup_last_success_timestamp_seconds $(date +%s)
+# HELP oneflow_backup_size_bytes Encrypted backup size
+# TYPE oneflow_backup_size_bytes gauge
+oneflow_backup_size_bytes $ENC_BYTES
+# HELP oneflow_backup_duration_seconds Backup duration in seconds
+# TYPE oneflow_backup_duration_seconds gauge
+oneflow_backup_duration_seconds $(( $(date +%s) - START_TS ))
+# HELP oneflow_backup_offsite_synced 1 if synced to Mac in this run, 0 otherwise
+# TYPE oneflow_backup_offsite_synced gauge
+oneflow_backup_offsite_synced ${SYNC_OK:-0}
+EOF
+mv -f "$TF_TMP" "$TEXTFILE_DIR/oneflow_backup.prom"
+chmod 644 "$TEXTFILE_DIR/oneflow_backup.prom"
+
+# ---- 12. Notify ----
 DURATION=$(($(date +%s) - START_TS))
-log "=== DONE ($DURATION s, enc=$ENC_SIZE) ==="
-notify "✅ Backup OK $DATE — ${ENC_SIZE} in ${DURATION}s" 3
+log "=== DONE ($DURATION s, enc=$ENC_SIZE, sync_ok=$SYNC_OK) ==="
+notify "✅ Backup OK $DATE — ${ENC_SIZE} in ${DURATION}s, sync_ok=$SYNC_OK" 3
