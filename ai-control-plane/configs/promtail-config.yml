@@ -27,7 +27,6 @@ scrape_configs:
       - source_labels: ["__meta_docker_container_label_com_docker_compose_project"]
         target_label: project
     pipeline_stages:
-      - cri: {}
       - docker: {}
       - json:
           expressions:
@@ -37,7 +36,6 @@ scrape_configs:
             user_id: user_id
             endpoint: endpoint
             error: error
-        drop_malformed: false
       - labels:
           level:
           request_id:
