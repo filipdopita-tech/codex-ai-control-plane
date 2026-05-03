@@ -1,0 +1,78 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    tenant_id: oneflow
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_project"]
+        target_label: project
+    pipeline_stages:
+      - cri: {}
+      - docker: {}
+      - json:
+          expressions:
+            level: level
+            ts: ts
+            request_id: request_id
+            user_id: user_id
+            endpoint: endpoint
+            error: error
+        drop_malformed: false
+      - labels:
+          level:
+          request_id:
+          endpoint:
+
+  - job_name: journal
+    journal:
+      max_age: 12h
+      labels:
+        job: systemd-journal
+        host: flash
+      path: /var/log/journal
+    relabel_configs:
+      - source_labels: ["__journal__systemd_unit"]
+        target_label: unit
+      - source_labels: ["__journal_priority_keyword"]
+        target_label: priority
+      - source_labels: ["__journal__hostname"]
+        target_label: hostname
+
+  - job_name: oneflow-app-files
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: oneflow-apps
+          __path__: /var/log/oneflow/*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            ts: ts
+            logger: logger
+            request_id: request_id
+            error: error
+      - labels:
+          level:
+          logger:
+          request_id:

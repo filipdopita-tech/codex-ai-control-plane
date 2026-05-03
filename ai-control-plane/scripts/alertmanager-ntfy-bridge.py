@@ -29,6 +29,11 @@ SEVERITY_PRIO = {"critical": "5", "warning": "3", "info": "2"}
 SEVERITY_EMOJI = {"critical": "🚨", "warning": "⚠️", "info": "ℹ️"}
 
 
+def _ascii_safe(s):
+    # ntfy v2 supports RFC 2047 for headers; ASCII fallback is safest
+    return s.encode("ascii", "replace").decode("ascii")
+
+
 def push_ntfy(title, body, priority="3", tags="bell"):
     req = urllib.request.Request(
         f"{NTFY_URL}/{NTFY_TOPIC}",
@@ -36,7 +41,7 @@ def push_ntfy(title, body, priority="3", tags="bell"):
         method="POST",
         headers={
             "Authorization": f"Bearer {NTFY_TOKEN}",
-            "Title": title[:128],
+            "Title": _ascii_safe(title)[:128],
             "Priority": priority,
             "Tags": tags,
             "Markdown": "yes",
@@ -48,7 +53,9 @@ def push_ntfy(title, body, priority="3", tags="bell"):
     except urllib.error.HTTPError as e:
         return e.code, e.read(500).decode("utf-8", errors="replace")
     except Exception as e:
-        return 0, str(e)[:200]
+        msg = f"{type(e).__name__}: {e}"
+        sys.stderr.write(f"[bridge] push_ntfy ERR: {msg}\n")
+        return 0, msg[:200]
 
 
 def format_alert(alert):
