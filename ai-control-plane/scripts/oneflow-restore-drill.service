@@ -1,0 +1,12 @@
+[Unit]
+Description=OneFlow weekly restore drill — verifies last backup is restorable
+Documentation=file:///usr/local/bin/oneflow-restore-drill.sh
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/oneflow-restore-drill.sh
+StandardOutput=journal
+StandardError=journal
+Nice=15
+TimeoutStartSec=1800

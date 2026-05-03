@@ -1,0 +1,15 @@
+[Unit]
+Description=OneFlow daily encrypted backup
+Documentation=file:///usr/local/bin/oneflow-backup.sh
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/oneflow-backup.sh
+StandardOutput=journal
+StandardError=journal
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=3600

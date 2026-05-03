@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily OneFlow backup at 02:00 UTC
+Documentation=file:///etc/systemd/system/oneflow-backup.service
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=oneflow-backup.service
+
+[Install]
+WantedBy=timers.target
