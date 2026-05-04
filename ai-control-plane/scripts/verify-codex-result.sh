@@ -107,18 +107,37 @@ if [ "$IS_GIT" -eq 1 ]; then
   fi
 
   # Detect Codex-made commits: HEAD moved during Codex run.
-  # Codex sandboxed with workspace-write CAN run `git commit` itself, and those
-  # changes won't show up in `git status --porcelain` afterwards (clean tree).
+  # Codex sandboxed with workspace-write CAN run `git commit` / `git reset` /
+  # `git rebase` itself. Three cases to handle:
+  #   1) HEAD advanced (commit/amend forward)  → rev-list before..HEAD
+  #   2) HEAD rewound  (reset --hard backward) → rev-list HEAD..before (lost)
+  #   3) Diverged      (rebase to new branch)  → use symmetric diff with --left-right
+  # We always also compute a flat name-only diff between the two HEADs which
+  # captures the file-level delta regardless of direction.
   CODEX_COMMITS=0
   CODEX_COMMITS_LIST=""
   CODEX_COMMITS_FILES=0
+  CODEX_HEAD_DIRECTION=""
   if [ -n "${CODEX_BEFORE_HEAD:-}" ]; then
     CURRENT_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
     if [ -n "$CURRENT_HEAD" ] && [ "$CURRENT_HEAD" != "$CODEX_BEFORE_HEAD" ]; then
-      # Count + summarize commits between before-HEAD and current-HEAD
-      CODEX_COMMITS=$(git rev-list --count "${CODEX_BEFORE_HEAD}..HEAD" 2>/dev/null || echo 0)
-      CODEX_COMMITS_LIST=$(git log --format="%h %s" "${CODEX_BEFORE_HEAD}..HEAD" 2>/dev/null | head -10 || true)
-      CODEX_COMMITS_FILES=$(git diff --name-only "${CODEX_BEFORE_HEAD}..HEAD" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+      # Determine direction
+      if git merge-base --is-ancestor "$CODEX_BEFORE_HEAD" "$CURRENT_HEAD" 2>/dev/null; then
+        CODEX_HEAD_DIRECTION="forward"
+        RANGE="${CODEX_BEFORE_HEAD}..HEAD"
+      elif git merge-base --is-ancestor "$CURRENT_HEAD" "$CODEX_BEFORE_HEAD" 2>/dev/null; then
+        CODEX_HEAD_DIRECTION="rewound"
+        # before contains current → Codex did `reset --hard` to drop commits
+        RANGE="HEAD..${CODEX_BEFORE_HEAD}"
+      else
+        CODEX_HEAD_DIRECTION="diverged"
+        # Symmetric — neither is ancestor (rebase to different parent)
+        RANGE="${CODEX_BEFORE_HEAD}...HEAD"
+      fi
+      CODEX_COMMITS=$(git rev-list --count "$RANGE" 2>/dev/null || echo 0)
+      CODEX_COMMITS_LIST=$(git log --format="%h %s" "$RANGE" 2>/dev/null | head -10 || true)
+      # Flat name-only diff catches all cases regardless of rev-list direction
+      CODEX_COMMITS_FILES=$(git diff --name-only "${CODEX_BEFORE_HEAD}" "${CURRENT_HEAD}" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
       # Treat committed file changes as part of the Codex delta
       CHANGED=$(( CHANGED + CODEX_COMMITS_FILES ))
     fi
@@ -135,6 +154,7 @@ else
   CODEX_COMMITS=0
   CODEX_COMMITS_LIST=""
   CODEX_COMMITS_FILES=0
+  CODEX_HEAD_DIRECTION=""
 fi
 
 # Result file metrics
@@ -219,9 +239,18 @@ fi
       echo "- Changed paths: $CHANGED"
       echo "- Snapshot mode: disabled (no pre-run snapshot — verdict uses total tree state)"
     fi
-    if [ "$CODEX_COMMITS" -gt 0 ]; then
+    if [ "$CODEX_COMMITS" -gt 0 ] || [ "$CODEX_COMMITS_FILES" -gt 0 ]; then
       echo
-      echo "### Codex-made commits ($CODEX_COMMITS, $CODEX_COMMITS_FILES file(s))"
+      DIR_LABEL="$CODEX_HEAD_DIRECTION"
+      [ -z "$DIR_LABEL" ] && DIR_LABEL="forward"
+      echo "### Codex-made commits ($CODEX_COMMITS, $CODEX_COMMITS_FILES file(s), HEAD-$DIR_LABEL)"
+      if [ "$DIR_LABEL" = "rewound" ]; then
+        echo
+        echo "**WARNING:** Codex moved HEAD backward — commits below were DROPPED, not added."
+      elif [ "$DIR_LABEL" = "diverged" ]; then
+        echo
+        echo "**WARNING:** Codex rebased — symmetric diff (commits unique to either side)."
+      fi
       echo
       echo '```'
       printf '%s\n' "$CODEX_COMMITS_LIST"

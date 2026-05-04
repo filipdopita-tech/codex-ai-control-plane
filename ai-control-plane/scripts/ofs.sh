@@ -326,6 +326,12 @@ cmd_mcp_cleanup() {
   log "mcp-cleanup" "ok" "$*"
 }
 
+cmd_bridge_smoke() {
+  log "bridge-smoke" "start" ""
+  "$ROOT/scripts/codex-bridge-smoke.sh"
+  log "bridge-smoke" "ok" ""
+}
+
 cmd_doctor() {
   log "doctor" "start" ""
   "$ROOT/scripts/doctor.sh"
@@ -594,6 +600,7 @@ COMMANDS
     update              run update-core (gcloud + VS Code ext + brew + doctor)
     optimize [--fast]   safe daily optimizer: updates/checks + Mac/MCP/handoff audit
     mcp-cleanup [args]  dry-run stale duplicate MCP cleanup; use --apply explicitly
+    bridge-smoke        low-cost Codex bridge smoke; expects OK_NOOP verify verdict
     handoffs [N]        list last N handoffs (default 10)
     handoff <file>      tail specific handoff
     verify [path]       anti-halucination gate: real git diff vs Codex claim
@@ -676,6 +683,7 @@ case "${1:-help}" in
   update|u)    shift; cmd_update "$@" ;;
   optimize|opt) shift; cmd_optimize "$@" ;;
   mcp-cleanup|mcpc) shift; cmd_mcp_cleanup "$@" ;;
+  bridge-smoke|bs) shift; cmd_bridge_smoke "$@" ;;
   doctor|dr)   shift; cmd_doctor "$@" ;;
   handoffs|h)  shift; cmd_handoffs "$@" ;;
   handoff)     shift; cmd_handoff "$@" ;;
