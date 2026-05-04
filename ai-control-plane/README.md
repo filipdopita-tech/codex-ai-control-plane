@@ -32,6 +32,7 @@ Nepouštět dvě AI do nekonečné debaty. Používat je jako dvě role nad stej
 # Diagnostika a údržba
 ./ai-control-plane/scripts/scan.sh                        # rychlý discovery
 ./ai-control-plane/scripts/doctor.sh                      # plná diagnostika
+./ai-control-plane/scripts/control-plane-optimize.sh       # safe daily optimizer
 ./ai-control-plane/scripts/update-core.sh                 # gcloud/VS Code/brew upgrade + doctor
 ./ai-control-plane/scripts/test-bridge.sh                 # end-to-end smoke test (Codex + Claude)
 ./ai-control-plane/scripts/cleanup-handoffs.sh --dry-run  # rotace audit logu
@@ -74,6 +75,8 @@ Cost rules:
   - Google/MCP/browser/plugin task -> AI_BRIDGE_CODEX_MODE=full
   - Nikdy: review po každé malé změně
   - Nikdy: secrets v handoff promptu
+  - Nikdy: delegace bez konkrétního projektu, ověření a koncového reportu
+  - Pokud nejde něco ověřit, výstup musí být označen jako neověřený včetně důvodu
 ```
 
 Praktický vstupní bod pro tento strom je `route-task.sh`. Ten vezme volný task,
@@ -88,6 +91,16 @@ vybere trasu, vypíše důvod rozhodnutí a potom zavolá existující bridge:
 - strategie, architektura, roadmapa, vysvětlení bez editace -> Claude strategy
 
 `update-core.sh` je top-tier update workflow pro jádro AI pracovního prostředí: Google Cloud SDK komponenty, VS Code AI/cloud rozšíření, plný `brew upgrade --greedy`, `brew autoremove`, cleanup a následný doctor report.
+
+Bezpečné režimy:
+
+```bash
+./ai-control-plane/scripts/control-plane-optimize.sh       # denní health/pressure/MCP/handoff pass
+./ai-control-plane/scripts/control-plane-optimize.sh --fast # bez pomalejších update signalů
+./ai-control-plane/scripts/update-core.sh --dry-run     # ukaž kroky bez změn
+./ai-control-plane/scripts/update-core.sh --check-only  # update signály + doctor bez upgradu
+./ai-control-plane/scripts/update-core.sh               # aplikuj update workflow
+```
 
 Automatizace: týdenní `launchd` job `com.filipdopita.ai-core-update` spouští `update-core.sh` každou sobotu v 04:15. Logy jsou v `~/Library/Logs/ai-control-plane/update-core.log` a `~/Library/Logs/ai-control-plane/update-core.err.log`.
 

@@ -58,11 +58,15 @@ $TASK
 ## Operating Rules
 
 - Read relevant files first; do not assume structure.
+- Use real ground truth first: \`pwd\`, \`git status\`, \`rg\`, \`ls\`, tests, build logs, healthchecks, and actual command output.
 - Change only what is necessary for this task. No drive-by refactors.
 - Do not print, copy, or include secrets, tokens, .env values in the report.
 - Prefer existing project patterns and conventions.
 - Run available tests, lint, or a project healthcheck after edits.
 - Stop on the first irrecoverable error and report it instead of guessing.
+- Do not claim completion because a plan sounds plausible; claim completion only for work you actually performed.
+- If something cannot be verified, label it \`[UNCERTAIN]\` and include the reason plus the exact next verification step.
+- Keep the loop bounded: do the requested task, verify it, report residual risk, then stop.
 
 ## Required Report Sections
 
