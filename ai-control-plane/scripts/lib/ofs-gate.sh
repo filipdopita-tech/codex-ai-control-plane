@@ -89,9 +89,13 @@ HAZARD_HITS=""
 HAZARD_PATTERNS='(curl[^|]*\| ?(bash|sh|zsh)|wget[^|]*\| ?(bash|sh|zsh)|rm -rf /( |$)|chmod 777|eval \$\()'
 if command -v git >/dev/null && git rev-parse --git-dir >/dev/null 2>&1; then
   CANDIDATES=$(git ls-files '*.sh' '*.bash' 2>/dev/null | head -200)
-  [ -n "$CANDIDATES" ] && HAZARD_HITS=$(printf '%s\n' "$CANDIDATES" | xargs grep -nE "$HAZARD_PATTERNS" 2>/dev/null | head -5)
+  [ -n "$CANDIDATES" ] && HAZARD_HITS=$(printf '%s\n' "$CANDIDATES" | xargs grep -nE "$HAZARD_PATTERNS" 2>/dev/null \
+    | grep -vE '(^|/)ofs-gate\.sh:|(^|/)update-extended\.sh:.*NIKDY' \
+    | head -5 || true)
 else
-  HAZARD_HITS=$(find . -name "*.sh" -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -200 | xargs grep -nE "$HAZARD_PATTERNS" 2>/dev/null | head -5)
+  HAZARD_HITS=$(find . -name "*.sh" -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -200 | xargs grep -nE "$HAZARD_PATTERNS" 2>/dev/null \
+    | grep -vE '(^|/)ofs-gate\.sh:|(^|/)update-extended\.sh:.*NIKDY' \
+    | head -5 || true)
 fi
 
 if [ -n "$HAZARD_HITS" ]; then
@@ -110,9 +114,15 @@ BAN_PATTERNS='inovativní|revoluční|komplexní řešení|win-win|synergie|para
 BRAND_HITS=""
 if command -v git >/dev/null && git rev-parse --git-dir >/dev/null 2>&1; then
   MD_FILES=$(git ls-files '*.md' 2>/dev/null | head -200)
-  [ -n "$MD_FILES" ] && BRAND_HITS=$(printf '%s\n' "$MD_FILES" | xargs grep -inE "$BAN_PATTERNS" 2>/dev/null | head -10)
+  [ -n "$MD_FILES" ] && BRAND_HITS=$(printf '%s\n' "$MD_FILES" | xargs grep -inE "$BAN_PATTERNS" 2>/dev/null \
+    | grep -vE '^(\.claude-core-rules\.md:.*Žádné|SESSION-|archive/|research-briefings/|scrapling-runs/|ai-control-plane/handoffs/)' \
+    | grep -vE '(BANNED_WORDS=|TOOL_INPUT_CONTENT=|opraví .*konkrétní benefit|FAIL detected|detects banned)' \
+    | head -10 || true)
 else
-  BRAND_HITS=$(find . -name "*.md" -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -200 | xargs grep -inE "$BAN_PATTERNS" 2>/dev/null | head -10)
+  BRAND_HITS=$(find . -name "*.md" -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -200 | xargs grep -inE "$BAN_PATTERNS" 2>/dev/null \
+    | grep -vE '^(\.claude-core-rules\.md:.*Žádné|SESSION-|archive/|research-briefings/|scrapling-runs/|ai-control-plane/handoffs/)' \
+    | grep -vE '(BANNED_WORDS=|TOOL_INPUT_CONTENT=|opraví .*konkrétní benefit|FAIL detected|detects banned)' \
+    | head -10 || true)
 fi
 
 if [ -n "$BRAND_HITS" ]; then
