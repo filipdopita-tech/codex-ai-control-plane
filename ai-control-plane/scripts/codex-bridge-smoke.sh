@@ -9,8 +9,8 @@
 #   4. Verdict is OK_NOOP (Codex returned text without making file changes)
 #
 # Output: status line to stdout + JSONL log entry. Exits non-zero on regression.
-# Suitable for manual runs or launchd if Filip explicitly chooses to schedule it:
-# short timeout, low usage, no UI. It is not auto-scheduled by this script.
+# Suitable for manual runs and the installed launchd smoke schedule:
+# short timeout, low usage, no UI. This script does not self-install launchd.
 #
 # Filip rules: anti-halluci real probe, cost-aware (1 Codex call/day max), no
 # secrets in output. Disable temporarily via SMOKE_OFF=1.
