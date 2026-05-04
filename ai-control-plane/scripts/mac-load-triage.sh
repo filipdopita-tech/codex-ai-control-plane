@@ -28,14 +28,18 @@ echo
 echo "Top CPU processes:"
 ps auxw 2>/dev/null \
   | sort -k3 -rn \
-  | awk 'NR==1 || NR<=16 {printf "%-8s %6s %6s %s\n", $1, $3, $4, $11}' \
+  | awk 'BEGIN {printf "%-12s %6s %6s %s\n", "USER", "%CPU", "%MEM", "COMMAND"}
+         $1 == "USER" {next}
+         shown < 15 {cmd=$11; for (i=12; i<=NF; i++) cmd=cmd" "$i; printf "%-12s %6s %6s %.140s\n", $1, $3, $4, cmd; shown++}' \
   || true
 echo
 
 echo "Top RAM processes:"
 ps auxw 2>/dev/null \
   | sort -k4 -rn \
-  | awk 'NR==1 || NR<=16 {printf "%-8s %6s %6s %s\n", $1, $3, $4, $11}' \
+  | awk 'BEGIN {printf "%-12s %6s %6s %s\n", "USER", "%CPU", "%MEM", "COMMAND"}
+         $1 == "USER" {next}
+         shown < 15 {cmd=$11; for (i=12; i<=NF; i++) cmd=cmd" "$i; printf "%-12s %6s %6s %.140s\n", $1, $3, $4, cmd; shown++}' \
   || true
 echo
 

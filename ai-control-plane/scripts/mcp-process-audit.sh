@@ -22,8 +22,10 @@ printf "%s\n" "$ps_rows" | awk '
   /memory-search-mcp/ {kind="memory-search-mcp"}
   {
     count[kind] += 1
-    cpu[kind] += $(NF-1)
-    mem[kind] += $NF
+    # ps columns are: pid lstart(5 fields) pcpu pmem command...
+    # Command arguments can contain spaces, so do not infer CPU/RAM from NF.
+    cpu[kind] += $7
+    mem[kind] += $8
   }
   END {
     printf "%-24s %6s %8s %8s\n", "kind", "count", "cpu%", "mem%"
