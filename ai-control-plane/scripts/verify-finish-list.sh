@@ -50,7 +50,16 @@ if [[ "$ntfy_http" == "200" ]]; then
 else
   log_fail "ntfy.oneflow.cz HTTP $ntfy_http"
 fi
-dispatch_secret='MqUZxwQeKN8Lm0LzkNMxvhHt7ay13nyhfd7tnLHRezc'
+dispatch_secret="${DISPATCH_SECRET:-}"
+if [ -z "$dispatch_secret" ] && [ -r "$HOME/.credentials/master.env" ]; then
+  # shellcheck disable=SC1090,SC1091
+  source "$HOME/.credentials/master.env" 2>/dev/null || true
+  dispatch_secret="${DISPATCH_SECRET:-}"
+fi
+if [ -z "$dispatch_secret" ]; then
+  log_warn "DISPATCH_SECRET not set in env or ~/.credentials/master.env — skipping dispatch HMAC test"
+  dispatch_secret="<unset>"
+fi
 dispatch_body='{"prompt":"verify-finish-list dispatch sanity"}'
 dispatch_sig=$(printf '%s' "$dispatch_body" | openssl dgst -sha256 -hmac "$dispatch_secret" -hex 2>/dev/null | awk '{print $NF}')
 dispatch_http=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://dispatch.oneflow.cz/webhooks/dispatch \

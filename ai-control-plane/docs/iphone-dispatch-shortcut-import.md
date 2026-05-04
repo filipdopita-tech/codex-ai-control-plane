@@ -10,7 +10,7 @@ Endpoint je live a HMAC podepisuje, jen na iPhone chybí Shortcut.
 ```
 Route:    dispatch
 Endpoint: https://dispatch.oneflow.cz/webhooks/dispatch
-Secret:   MqUZxwQeKN8Lm0LzkNMxvhHt7ay13nyhfd7tnLHRezc   (HMAC-SHA256)
+Secret:   <REDACTED — see Flash `~/.credentials/master.env` `DISPATCH_SECRET`>   (HMAC-SHA256)
 Method:   POST
 Header:   X-Hub-Signature-256: sha256=<HMAC-SHA256(body, secret)>
 Body:     {"prompt":"<your text>"}  (Content-Type: application/json)
@@ -54,7 +54,7 @@ Trochu delší, ale matchne produkci. Cca 3 minuty na iPhone.
 5. Add **Get Variable** → set var name `body_json` → input the previous Text
 6. Add **Text** action → contents:
    ```
-   MqUZxwQeKN8Lm0LzkNMxvhHt7ay13nyhfd7tnLHRezc
+   <REDACTED-DISPATCH-SECRET>
    ```
    Set var `secret_key`. (Tato hodnota je dispatch HMAC secret — drž ji v iCloud Keychain backed-up shortcut, ne plain note.)
 7. Add **Calculate Hash** action (if available; iOS 17+) → algorithm `HMAC-SHA-256`, input `body_json`, key `secret_key` → output to var `sig_hex`
@@ -83,7 +83,7 @@ Trochu delší, ale matchne produkci. Cca 3 minuty na iPhone.
 ## Sanity test from Mac (proves server side works before debugging iPhone)
 
 ```bash
-SECRET='MqUZxwQeKN8Lm0LzkNMxvhHt7ay13nyhfd7tnLHRezc'
+SECRET='<REDACTED-DISPATCH-SECRET>'
 BODY='{"prompt":"sanity test from mac"}'
 SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" -hex | awk '{print $NF}')
 curl -s -X POST https://dispatch.oneflow.cz/webhooks/dispatch \
