@@ -1,0 +1,35 @@
+{
+  "name": "it-leadership",
+  "description": "Firmy hledající IT vedení (CTO, IT manager, head of IT). Warm signál pro OneFlow AI agent služby.",
+  "query": "IT manager",
+  "max_pages": 8,
+  "use_session": true,
+  "min_score": 1,
+  "whitelist": [
+    "IT manager",
+    "IT manažer",
+    "head of IT",
+    "head of engineering",
+    "CTO",
+    "chief technology",
+    "IT ředitel",
+    "ředitel IT",
+    "IT director",
+    "vedoucí IT",
+    "VP.*engineer",
+    "VP.*technol",
+    "tech lead",
+    "engineering manager",
+    "principal engineer",
+    "platform lead"
+  ],
+  "blacklist": [
+    "junior",
+    "praktikant",
+    "stáž",
+    "trainee",
+    "intern",
+    "asistent"
+  ],
+  "exclude_companies": []
+}

@@ -1,0 +1,40 @@
+{
+  "name": "operations-leadership",
+  "description": "Firmy hledající operations vedení (COO, head of operations, ops manager). Často firmy ve scaleup fázi = warm signál pro AI agent / process automation.",
+  "query": "operations",
+  "max_pages": 8,
+  "use_session": true,
+  "min_score": 1,
+  "whitelist": [
+    "COO",
+    "chief operating",
+    "operations.*ředitel",
+    "ředitel.*provoz",
+    "head of operations",
+    "operations director",
+    "operations manager",
+    "operational excellence",
+    "head of process",
+    "process manager.*senior",
+    "vedoucí provozu",
+    "provozní ředitel",
+    "head of supply chain",
+    "supply chain director",
+    "head of logistics",
+    "logistics director",
+    "automation manager",
+    "head of automation"
+  ],
+  "blacklist": [
+    "junior",
+    "praktikant",
+    "stáž",
+    "trainee",
+    "intern",
+    "asistent",
+    "operátor",
+    "vyzvedávání",
+    "skladník"
+  ],
+  "exclude_companies": []
+}

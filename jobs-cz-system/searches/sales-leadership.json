@@ -1,0 +1,41 @@
+{
+  "name": "sales-leadership",
+  "description": "Firmy hledající sales vedení (CRO, sales director, head of sales, B2B sales lead). Direct OneFlow B2B angle.",
+  "query": "sales",
+  "max_pages": 10,
+  "use_session": true,
+  "min_score": 1,
+  "whitelist": [
+    "CRO",
+    "chief revenue",
+    "sales.*ředitel",
+    "ředitel.*sales",
+    "ředitel obchodu",
+    "obchodní ředitel",
+    "head of sales",
+    "sales director",
+    "sales manager.*senior",
+    "VP.*sales",
+    "B2B sales",
+    "enterprise.*sales",
+    "key account.*manager",
+    "key account director",
+    "business development.*manager",
+    "business development director",
+    "BDR.*manager",
+    "SDR.*manager",
+    "head of business development"
+  ],
+  "blacklist": [
+    "junior",
+    "praktikant",
+    "stáž",
+    "trainee",
+    "intern",
+    "asistent",
+    "telefonický prodej",
+    "call center",
+    "sales representative junior"
+  ],
+  "exclude_companies": []
+}

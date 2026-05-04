@@ -1,0 +1,37 @@
+{
+  "name": "marketing-leadership",
+  "description": "Firmy hledající marketing vedení (CMO, marketing ředitel, head of marketing, growth lead).",
+  "query": "marketing",
+  "max_pages": 10,
+  "use_session": true,
+  "min_score": 1,
+  "whitelist": [
+    "marketing.*ředitel",
+    "ředitel.*marketing",
+    "head of marketing",
+    "marketing.*manager",
+    "manager.*marketing",
+    "CMO",
+    "chief marketing",
+    "vedoucí marketing",
+    "marketing.*vedoucí",
+    "marketing director",
+    "growth.*lead",
+    "growth.*manager",
+    "performance.*marketing.*manager",
+    "marketing.*specialist.*senior",
+    "brand.*manager",
+    "brand director"
+  ],
+  "blacklist": [
+    "junior",
+    "praktikant",
+    "stáž",
+    "trainee",
+    "intern",
+    "asistent",
+    "junior specialist",
+    "social media specialist junior"
+  ],
+  "exclude_companies": []
+}
