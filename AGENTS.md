@@ -18,4 +18,15 @@ Primary commands:
 ./ai-control-plane/scripts/update-core.sh
 ./ai-control-plane/scripts/delegate-to-codex.sh /path/to/project "task"
 ./ai-control-plane/scripts/ask-claude-review.sh /path/to/project "review request"
+./ai-control-plane/scripts/verify-codex-result.sh /path/to/project   # anti-halucinace gate
 ```
+
+After every Codex delegation, an anti-halucinace gate runs automatically:
+captures real `git diff` in the target project and flags claim/diff
+mismatches. Disable per-call with `AI_BRIDGE_VERIFY=0`. Re-run manually
+with `ofs verify /path/to/project`.
+
+Codex/Claude report contract (enforced by handoff template):
+1. Changed files (path:lines + rationale) 2. Verification run (commands+outcome)
+3. Confidence per claim (`[VERIFIED]`/`[LIKELY]`/`[GUESS]`/`[UNCERTAIN]`)
+4. Residual risk. Never omit a section — say "none" if empty.
