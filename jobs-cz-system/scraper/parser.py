@@ -1,7 +1,16 @@
 """HTML parsers — listing cards (search results) + detail pages.
 
-Robust strategy: try multiple selectors per field, fall back to attribute scrape.
-jobs.cz layout může mírně měnit — selectory jsou broad fuzzy match na class names."""
+Selektory založeny na actual jobs.cz layout (verified 2026-05-04):
+  - article.SearchResultCard            — card root
+  - h2.SearchResultCard__title          — title h2 with data-test-ad-title attr
+  - a.SearchResultCard__titleLink       — title link (href = detail URL)
+  - a[data-jobad-id]                    — jobad ID
+  - [data-test-ad-status]               — posted date / status badge
+  - .SearchResultCard__footerItem       — footer items (company, location, salary, type)
+  - li[data-test="serp-locality"]       — location item
+  - span[translate="no"]                — usually company (translate-no marker)
+  - .Tag                                — tag chips
+"""
 from __future__ import annotations
 
 import re
@@ -14,104 +23,100 @@ def _txt(el: Optional[Tag], limit: int = 0) -> str:
     if not el:
         return ""
     s = el.get_text(separator=" ", strip=True)
-    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
     return s[:limit] if limit else s
 
 
-def _select_first(art: Tag, *selectors: str) -> Optional[Tag]:
-    for sel in selectors:
-        el = art.select_one(sel)
-        if el:
-            return el
-    return None
+# Salary heuristic — CZ patterns: "30 000 - 50 000 Kč", "50 000 Kč/měsíc"
+_SALARY_RE = re.compile(r"\d[\d\s]{2,}\s*(?:Kč|EUR|€|USD|\$)|(?:Kč|EUR|\$)\s*\d", re.I)
+# Employment type heuristic
+_EMPL_KEYWORDS = re.compile(r"plný úvazek|částečný|hpp|dpp|dpč|brigád|práce z domova|home office|hybrid|remote|kontrakt|freelance", re.I)
 
 
 def parse_listing_page(html: str, page_url: str = "") -> List[dict]:
     """Parse search result HTML → list of card dicts.
 
-    Pokrytí: title, url, jobad_id, company, location, salary, posted, snippet, tags."""
+    Pokrytí: title, url, jobad_id, company, location, salary, posted, tags, employment_type."""
     soup = BeautifulSoup(html, "html.parser")
     cards: List[dict] = []
-    # Primary selector
-    arts = soup.select("article[data-jobad-id]")
-    if not arts:
-        arts = soup.select("[data-jobad-id]")
+    arts = soup.select("article.SearchResultCard, article[class*='ResultCard']")
     if not arts:
         arts = soup.select("article")
 
     for art in arts:
-        d: dict = {"jobad_id": "", "title": "", "url": "", "company": "", "location": "",
-                   "salary": "", "posted": "", "snippet": "", "tags": [], "source_page": page_url}
-        d["jobad_id"] = art.get("data-jobad-id") or art.get("id") or ""
+        d: dict = {
+            "jobad_id": "", "title": "", "url": "", "company": "", "location": "",
+            "salary": "", "employment_type": "", "posted": "", "snippet": "",
+            "tags": [], "source_page": page_url,
+        }
 
-        # Title + URL
-        title_el = _select_first(
-            art,
-            "h2 a", "h3 a",
-            "[class*='Title'] a", "[class*='title'] a",
-            "a[data-link-name]",
-            "a[href*='/rpd/']",
-            "a[href*='/job/']",
-        )
-        if title_el:
-            d["title"] = _txt(title_el)
-            href = title_el.get("href", "")
-            if href:
-                if href.startswith("/"):
-                    href = "https://www.jobs.cz" + href
-                d["url"] = href
+        # Title link → jobad_id, title, url
+        link = art.select_one("a.SearchResultCard__titleLink, a[data-jobad-id]")
+        if link:
+            d["jobad_id"] = link.get("data-jobad-id") or ""
+            d["url"] = link.get("href") or ""
+            if d["url"].startswith("/"):
+                d["url"] = "https://www.jobs.cz" + d["url"]
+            d["title"] = _txt(link)
 
-        # Company
-        comp_el = _select_first(
-            art,
-            "[class*='Company']", "[class*='company']",
-            "[class*='Subject']", "[class*='subject']",
-            "[class*='Employer']", "[class*='employer']",
-            "[data-link-name='company']",
-        )
-        d["company"] = _txt(comp_el, 200)
+        # h2 with data-test-ad-title attr (cleaner — no whitespace)
+        h2 = art.select_one("h2[data-test-ad-title], [data-test-ad-title]")
+        if h2:
+            attr_title = h2.get("data-test-ad-title", "")
+            if attr_title:
+                d["title"] = attr_title.strip()
 
-        # Location
-        loc_el = _select_first(
-            art,
-            "[class*='Location']", "[class*='location']",
-            "[class*='Locality']", "[class*='locality']",
-            "[data-link-name='locality']",
-        )
-        d["location"] = _txt(loc_el, 200)
+        # Posted / status
+        status = art.select_one("[data-test-ad-status]")
+        if status:
+            d["posted"] = _txt(status, 80)
 
-        # Salary / wage
-        sal_el = _select_first(
-            art,
-            "[class*='Salary']", "[class*='salary']",
-            "[class*='Wage']", "[class*='wage']",
-            "[class*='Mzd']", "[class*='mzd']",
-            "[class*='Plat']", "[class*='plat']",
-        )
-        d["salary"] = _txt(sal_el, 100)
+        # Footer items — iterate, classify by content / data-test attribute
+        for li in art.select(".SearchResultCard__footerItem"):
+            txt = _txt(li, 200)
+            if not txt:
+                continue
+            # Location — explicit data-test
+            if li.get("data-test") == "serp-locality" or "serp-locality" in (li.get("data-test", "")):
+                d["location"] = txt
+                continue
+            # Company — usually has translate="no" span inside
+            comp_span = li.select_one('span[translate="no"]')
+            if comp_span and not d["company"]:
+                d["company"] = _txt(comp_span, 200)
+                continue
+            # Salary heuristic
+            if _SALARY_RE.search(txt) and not d["salary"]:
+                d["salary"] = txt
+                continue
+            # Employment type heuristic
+            if _EMPL_KEYWORDS.search(txt) and not d["employment_type"]:
+                d["employment_type"] = txt
+                continue
 
-        # Posted date / freshness
-        date_el = _select_first(art, "time", "[class*='Date']", "[class*='date']", "[class*='Posted']", "[class*='posted']")
-        d["posted"] = _txt(date_el, 80)
-        if date_el and date_el.has_attr("datetime"):
-            d["posted_iso"] = date_el["datetime"]
+        # Fallback: company from any translate=no span anywhere in card
+        if not d["company"]:
+            comp = art.select_one('span[translate="no"]')
+            if comp:
+                d["company"] = _txt(comp, 200)
 
-        # Snippet / description preview
-        snip_el = _select_first(art, "[class*='Description']", "[class*='description']", "[class*='Summary']", "[class*='summary']", "p")
-        d["snippet"] = _txt(snip_el, 400)
-
-        # Tags / chips / badges
-        tag_els = art.select("[class*='Tag'], [class*='tag'], [class*='Chip'], [class*='chip'], [class*='Badge'], [class*='badge']")
-        seen_tags = set()
-        tags: List[str] = []
-        for t in tag_els:
+        # Tags
+        tags = []
+        seen = set()
+        for t in art.select(".Tag, [class*='Tag--']"):
             txt = _txt(t)
-            if 1 < len(txt) < 60 and txt.lower() not in seen_tags:
-                seen_tags.add(txt.lower())
+            key = txt.lower()
+            if 1 < len(txt) < 80 and key not in seen:
+                seen.add(key)
                 tags.append(txt)
         d["tags"] = tags[:15]
 
-        if d["title"] or d["url"] or d["jobad_id"]:
+        # Snippet from body
+        body = art.select_one(".SearchResultCard__body")
+        if body:
+            d["snippet"] = _txt(body, 400)
+
+        if d["jobad_id"] or d["url"] or d["title"]:
             cards.append(d)
 
     return cards
@@ -125,11 +130,12 @@ def parse_detail_page(html: str, url: str = "") -> dict:
     d: dict = {"url": url, "title": "", "company": "", "description": "", "requirements": "",
                "benefits": "", "contact_email": "", "contact_phone": "", "company_url": ""}
 
-    title_el = _select_first(soup, "h1", "[class*='Title'] h1, h1[class*='Title']")
-    d["title"] = _txt(title_el)
+    title_el = soup.select_one("h1[data-test-ad-title], h1")
+    d["title"] = _txt(title_el) if title_el else ""
 
-    comp_el = _select_first(soup, "[class*='Company'] a", "[class*='Employer'] a", "h2 a")
-    d["company"] = _txt(comp_el, 200)
+    # Company link
+    comp_el = soup.select_one('a[data-test-employer-link], [data-test-employer] a, span[translate="no"]')
+    d["company"] = _txt(comp_el, 200) if comp_el else ""
     if comp_el and comp_el.has_attr("href"):
         href = comp_el["href"]
         if href.startswith("/"):
@@ -137,16 +143,18 @@ def parse_detail_page(html: str, url: str = "") -> dict:
         d["company_url"] = href
 
     # Full description
-    desc_el = _select_first(soup, "[class*='Description']", "[class*='JobDescription']", "main")
-    d["description"] = _txt(desc_el, 5000)
+    desc_el = soup.select_one("[class*='Description'], [class*='JobDescription'], main")
+    d["description"] = _txt(desc_el, 5000) if desc_el else ""
 
     # Email + phone scrape from text
     text = soup.get_text(" ")
     emails = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
     if emails:
-        d["contact_email"] = emails[0]
-    phones = re.findall(r"(\+?\d{3}[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{3})", text)
+        # Filter out tracking / no-reply patterns
+        good = [e for e in emails if not any(b in e.lower() for b in ("noreply", "no-reply", "donotreply", "tracking", "@jobs.cz"))]
+        d["contact_email"] = good[0] if good else emails[0]
+    phones = re.findall(r"(\+?\d{3}[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{0,3})", text)
     if phones:
-        d["contact_phone"] = phones[0]
+        d["contact_phone"] = phones[0].strip()
 
     return d

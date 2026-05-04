@@ -67,8 +67,8 @@ echo
 echo "VS Code"
 if [ -x "$REAL_CODE" ]; then
   status "OK" "real code CLI" "$REAL_CODE"
-  "$REAL_CODE" --version | sed -n '1,3p'
-  "$REAL_CODE" --list-extensions \
+  "$REAL_CODE" --version 2>/dev/null | sed -n '1,3p' || true
+  "$REAL_CODE" --list-extensions 2>/dev/null \
     | grep -Ei '^(openai.chatgpt|anthropic.claude-code|googlecloudtools.cloudcode|ms-vscode-remote.remote-ssh|ms-vscode-remote.remote-containers)$' \
     | sort || true
 else
@@ -86,8 +86,10 @@ echo
 
 echo "Update signals"
 if have gcloud; then
-  GCLOUD_UPDATES="$(gcloud components list --filter='state.name:Update Available' --format='value(id)' 2>/dev/null || true)"
-  if [ -n "$GCLOUD_UPDATES" ]; then
+  GCLOUD_ERR="$(mktemp)"
+  if ! GCLOUD_UPDATES="$(gcloud components list --filter='state.name:Update Available' --format='value(id)' 2>"$GCLOUD_ERR")"; then
+    status "WARN" "gcloud updates" "$(sed -n '1p' "$GCLOUD_ERR")"
+  elif [ -n "$GCLOUD_UPDATES" ]; then
     printf "%s\n" "$GCLOUD_UPDATES" | sed 's/^/UPDATE gcloud /'
   else
     status "OK" "gcloud" "no component updates reported"
@@ -95,8 +97,10 @@ if have gcloud; then
 fi
 
 if have brew; then
-  BREW_OUTDATED="$(brew outdated --greedy 2>/dev/null || true)"
-  if [ -n "$BREW_OUTDATED" ]; then
+  BREW_ERR="$(mktemp)"
+  if ! BREW_OUTDATED="$(brew outdated --greedy 2>"$BREW_ERR")"; then
+    status "WARN" "brew updates" "$(sed -n '1p' "$BREW_ERR")"
+  elif [ -n "$BREW_OUTDATED" ]; then
     printf "%s\n" "$BREW_OUTDATED" | sed 's/^/UPDATE brew /'
   else
     status "OK" "brew" "no outdated formulae/casks reported"
@@ -104,10 +108,16 @@ if have brew; then
 fi
 
 if have npm; then
-  NPM_OUTDATED="$(npm outdated -g --depth=0 2>/dev/null || true)"
-  if [ -n "$NPM_OUTDATED" ]; then
+  NPM_ERR="$(mktemp)"
+  if ! NPM_OUTDATED="$(npm outdated -g --depth=0 2>"$NPM_ERR")"; then
+    status "WARN" "npm global" "$(sed -n '1p' "$NPM_ERR")"
+  elif [ -n "$NPM_OUTDATED" ]; then
     printf "%s\n" "$NPM_OUTDATED" | sed 's/^/UPDATE npm /'
   else
     status "OK" "npm global" "no outdated packages reported"
   fi
 fi
+
+echo
+echo "Ecosystem audit"
+"$ROOT/ai-control-plane/scripts/ecosystem-audit.sh" || true

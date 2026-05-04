@@ -121,10 +121,12 @@ if [ -n "$ports" ]; then
   echo "$ports" >> "$REPORT"
   echo '```' >> "$REPORT"
 
-  # Flag any 0.0.0.0 listeners (potential exposure)
-  exposed=$(lsof -i -P -n 2>/dev/null | grep -E 'LISTEN.*\*:[0-9]+' | wc -l | tr -d ' ')
+  # Flag wildcard listeners (potential exposure). Use the normalized port list
+  # because lsof formats LISTEN differently across macOS versions.
+  exposed=$(printf "%s\n" "$ports" | grep -E '\*:[0-9]+' | wc -l | tr -d ' ')
   if [ "$exposed" -gt 0 ]; then
-    echo_check "⚠️" "$exposed services listening on 0.0.0.0" "review Caddy/UFW rules"
+    echo_check "⚠️" "$exposed services listening on wildcard interfaces" "review expected local services"
+    printf "%s\n" "$ports" | grep -E '\*:[0-9]+' | sed 's/^/  - /' >> "$REPORT"
     findings=$((findings + 1))
   fi
 fi

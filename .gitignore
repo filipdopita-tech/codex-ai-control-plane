@@ -1,5 +1,6 @@
 .DS_Store
 .vscode/
+.claude/
 *.swp
 *.swo
 *.tmp
@@ -12,6 +13,7 @@ restoration.log
 *.pem
 *.key
 secrets/
+security-reports/
 node_modules/
 __pycache__/
 *.pyc
