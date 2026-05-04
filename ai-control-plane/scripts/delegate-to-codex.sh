@@ -69,10 +69,14 @@ esac
 # real Codex delta (not the total dirty-tree state). Eliminates the
 # "REVIEW: 27 files changed but Codex output not explicit" false-positive
 # when working tree already had pending edits unrelated to Codex.
+# Also capture HEAD commit so verify gate can detect Codex-made commits
+# (Codex with --sandbox workspace-write can run `git commit` itself).
 BEFORE_SNAPSHOT=""
+BEFORE_HEAD=""
 if [ -d "$PROJECT/.git" ]; then
   BEFORE_SNAPSHOT="$(mktemp -t codex-before.XXXXXX)"
   git -C "$PROJECT" status --porcelain > "$BEFORE_SNAPSHOT" 2>/dev/null || true
+  BEFORE_HEAD="$(git -C "$PROJECT" rev-parse HEAD 2>/dev/null || true)"
 fi
 
 {
@@ -100,7 +104,9 @@ echo "Saved result: $RESULT"
 # AI_BRIDGE_VERIFY=0. Pass before-snapshot so verify can compute real delta.
 if [ "${AI_BRIDGE_VERIFY:-1}" = "1" ] && [ -x "$ROOT/scripts/verify-codex-result.sh" ]; then
   echo
-  CODEX_BEFORE_SNAPSHOT="$BEFORE_SNAPSHOT" "$ROOT/scripts/verify-codex-result.sh" "$PROJECT" "$RESULT" || true
+  CODEX_BEFORE_SNAPSHOT="$BEFORE_SNAPSHOT" \
+  CODEX_BEFORE_HEAD="$BEFORE_HEAD" \
+    "$ROOT/scripts/verify-codex-result.sh" "$PROJECT" "$RESULT" || true
 fi
 
 # Cleanup snapshot tmpfile

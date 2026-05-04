@@ -105,6 +105,24 @@ if [ "$IS_GIT" -eq 1 ]; then
     DELTA_PREVIEW=""
     SNAPSHOT_USED=0
   fi
+
+  # Detect Codex-made commits: HEAD moved during Codex run.
+  # Codex sandboxed with workspace-write CAN run `git commit` itself, and those
+  # changes won't show up in `git status --porcelain` afterwards (clean tree).
+  CODEX_COMMITS=0
+  CODEX_COMMITS_LIST=""
+  CODEX_COMMITS_FILES=0
+  if [ -n "${CODEX_BEFORE_HEAD:-}" ]; then
+    CURRENT_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+    if [ -n "$CURRENT_HEAD" ] && [ "$CURRENT_HEAD" != "$CODEX_BEFORE_HEAD" ]; then
+      # Count + summarize commits between before-HEAD and current-HEAD
+      CODEX_COMMITS=$(git rev-list --count "${CODEX_BEFORE_HEAD}..HEAD" 2>/dev/null || echo 0)
+      CODEX_COMMITS_LIST=$(git log --format="%h %s" "${CODEX_BEFORE_HEAD}..HEAD" 2>/dev/null | head -10 || true)
+      CODEX_COMMITS_FILES=$(git diff --name-only "${CODEX_BEFORE_HEAD}..HEAD" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+      # Treat committed file changes as part of the Codex delta
+      CHANGED=$(( CHANGED + CODEX_COMMITS_FILES ))
+    fi
+  fi
 else
   CHANGED=0
   CHANGED_TOTAL=0
@@ -114,6 +132,9 @@ else
   DIFF_PREVIEW=""
   DELTA_PREVIEW=""
   SNAPSHOT_USED=0
+  CODEX_COMMITS=0
+  CODEX_COMMITS_LIST=""
+  CODEX_COMMITS_FILES=0
 fi
 
 # Result file metrics
@@ -158,7 +179,11 @@ elif [ "$CHANGED" -gt 0 ] && [ "$CLAIM_CHANGED" -gt 0 ]; then
   NOTE="$CHANGED file(s) changed and Codex claimed edits — consistent"
 elif [ "$CHANGED" -gt 0 ]; then
   VERDICT="REVIEW"
-  NOTE="$CHANGED file(s) changed but Codex output is not explicit about it"
+  if [ "$CODEX_COMMITS" -gt 0 ]; then
+    NOTE="$CHANGED file(s) changed (incl. $CODEX_COMMITS Codex commit(s)) but Codex output not explicit about it"
+  else
+    NOTE="$CHANGED file(s) changed but Codex output is not explicit about it"
+  fi
 else
   VERDICT="OK_NOOP"
   NOTE="no changes detected"
@@ -178,11 +203,13 @@ fi
   if [ "$IS_GIT" -eq 1 ]; then
     if [ "$SNAPSHOT_USED" -eq 1 ]; then
       echo "- Changed paths (Codex delta): $CHANGED"
-      echo "- Total dirty paths in tree: $CHANGED_TOTAL (pre-existing + Codex)"
+      echo "  - uncommitted-diff delta: $(( CHANGED - CODEX_COMMITS_FILES ))"
+      echo "  - committed-by-Codex delta: $CODEX_COMMITS_FILES"
+      echo "- Total dirty paths in tree: $CHANGED_TOTAL (pre-existing + Codex uncommitted)"
       echo "- Snapshot mode: ENABLED (before/after diff)"
       if [ -n "$DELTA_PREVIEW" ]; then
         echo
-        echo "### Codex-only delta (first 20 status lines)"
+        echo "### Codex-only delta (first 20 status lines, uncommitted)"
         echo
         echo '```'
         printf '%s\n' "$DELTA_PREVIEW"
@@ -191,6 +218,14 @@ fi
     else
       echo "- Changed paths: $CHANGED"
       echo "- Snapshot mode: disabled (no pre-run snapshot — verdict uses total tree state)"
+    fi
+    if [ "$CODEX_COMMITS" -gt 0 ]; then
+      echo
+      echo "### Codex-made commits ($CODEX_COMMITS, $CODEX_COMMITS_FILES file(s))"
+      echo
+      echo '```'
+      printf '%s\n' "$CODEX_COMMITS_LIST"
+      echo '```'
     fi
     echo "- Untracked (new) files: $UNTRACKED"
     echo "- Unstaged: ${UNSTAGED:-none}"
