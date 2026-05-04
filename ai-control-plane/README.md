@@ -33,6 +33,7 @@ Nepouštět dvě AI do nekonečné debaty. Používat je jako dvě role nad stej
 ./ai-control-plane/scripts/scan.sh                        # rychlý discovery
 ./ai-control-plane/scripts/doctor.sh                      # plná diagnostika
 ./ai-control-plane/scripts/control-plane-optimize.sh       # safe daily optimizer
+./ai-control-plane/scripts/mcp-process-cleanup.sh          # dry-run stale MCP cleanup
 ./ai-control-plane/scripts/update-core.sh                 # gcloud/VS Code/brew upgrade + doctor
 ./ai-control-plane/scripts/test-bridge.sh                 # end-to-end smoke test (Codex + Claude)
 ./ai-control-plane/scripts/cleanup-handoffs.sh --dry-run  # rotace audit logu
@@ -97,6 +98,8 @@ Bezpečné režimy:
 ```bash
 ./ai-control-plane/scripts/control-plane-optimize.sh       # denní health/pressure/MCP/handoff pass
 ./ai-control-plane/scripts/control-plane-optimize.sh --fast # bez pomalejších update signalů
+./ai-control-plane/scripts/mcp-process-cleanup.sh          # ukaž stale duplicate MCP procesy
+./ai-control-plane/scripts/mcp-process-cleanup.sh --apply --kind code-review-graph
 ./ai-control-plane/scripts/update-core.sh --dry-run     # ukaž kroky bez změn
 ./ai-control-plane/scripts/update-core.sh --check-only  # update signály + doctor bez upgradu
 ./ai-control-plane/scripts/update-core.sh               # aplikuj update workflow

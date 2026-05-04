@@ -102,6 +102,19 @@ fi
 
 section "MCP Fan-out"
 "$ROOT/ai-control-plane/scripts/mcp-process-audit.sh" || note_warn "mcp-process-audit failed"
+cleanup_out="$(mktemp -t mcp-cleanup-dry-run.XXXXXX)"
+if "$ROOT/ai-control-plane/scripts/mcp-process-cleanup.sh" --older-than-min 30 > "$cleanup_out" 2>&1; then
+  cat "$cleanup_out"
+  cleanup_has_candidates=0
+  if grep -q '^Dry-run only' "$cleanup_out"; then
+    cleanup_has_candidates=1
+  fi
+else
+  cat "$cleanup_out"
+  cleanup_has_candidates=0
+  note_warn "mcp-process-cleanup dry-run failed"
+fi
+rm -f "$cleanup_out" 2>/dev/null || true
 mcp_total="$(ps -axo command 2>/dev/null \
   | (egrep 'obsidian-mcp|code-review-graph serve|context7-mcp|stitch-mcp|mcp-server-filesystem|scrapling mcp|memory-search-mcp' || true) \
   | (egrep -v 'egrep|mcp-process-audit|control-plane-optimize' || true) \
@@ -109,7 +122,11 @@ mcp_total="$(ps -axo command 2>/dev/null \
   | tr -d ' ')"
 if [ "$mcp_total" -gt 20 ] 2>/dev/null; then
   note_warn "$mcp_total MCP-like processes running"
-  note_action "Close stale Claude/VS Code sessions first; then rerun mcp-process-audit"
+  if [ "${cleanup_has_candidates:-0}" -eq 1 ]; then
+    note_action "Inspect cleanup dry-run; if safe, run: ./ai-control-plane/scripts/mcp-process-cleanup.sh --apply --kind code-review-graph"
+  else
+    note_action "No stale duplicate MCP cleanup candidates remain; reduce count by closing stale Claude/VS Code sessions"
+  fi
 fi
 
 section "Handoff Rotation"
