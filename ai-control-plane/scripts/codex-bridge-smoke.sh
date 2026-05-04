@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# codex-bridge-smoke.sh — daily smoke test for Codex bridge anti-halucination gate.
+# codex-bridge-smoke.sh — smoke test for Codex bridge anti-halucination gate.
 #
 # Runs the cheapest possible Codex call ("return literal text, no edits") and
 # checks that:
@@ -9,7 +9,8 @@
 #   4. Verdict is OK_NOOP (Codex returned text without making file changes)
 #
 # Output: status line to stdout + JSONL log entry. Exits non-zero on regression.
-# Designed for launchd: short timeout, low usage, no UI.
+# Suitable for manual runs or launchd if Filip explicitly chooses to schedule it:
+# short timeout, low usage, no UI. It is not auto-scheduled by this script.
 #
 # Filip rules: anti-halluci real probe, cost-aware (1 Codex call/day max), no
 # secrets in output. Disable temporarily via SMOKE_OFF=1.
