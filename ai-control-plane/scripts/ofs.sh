@@ -314,6 +314,12 @@ cmd_update() {
   log "update" "ok" ""
 }
 
+cmd_optimize() {
+  log "optimize" "start" "${1:-}"
+  "$ROOT/scripts/control-plane-optimize.sh" "$@"
+  log "optimize" "ok" "${1:-}"
+}
+
 cmd_doctor() {
   log "doctor" "start" ""
   "$ROOT/scripts/doctor.sh"
@@ -580,6 +586,7 @@ COMMANDS
 
   Maintenance
     update              run update-core (gcloud + VS Code ext + brew + doctor)
+    optimize [--fast]   safe daily optimizer: updates/checks + Mac/MCP/handoff audit
     handoffs [N]        list last N handoffs (default 10)
     handoff <file>      tail specific handoff
     verify [path]       anti-halucination gate: real git diff vs Codex claim
@@ -660,6 +667,7 @@ case "${1:-help}" in
   mac|m)       shift; cmd_mac "$@" ;;
   vps|v)       shift; cmd_vps "$@" ;;
   update|u)    shift; cmd_update "$@" ;;
+  optimize|opt) shift; cmd_optimize "$@" ;;
   doctor|dr)   shift; cmd_doctor "$@" ;;
   handoffs|h)  shift; cmd_handoffs "$@" ;;
   handoff)     shift; cmd_handoff "$@" ;;
