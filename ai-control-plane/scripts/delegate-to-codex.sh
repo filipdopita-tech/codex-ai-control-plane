@@ -65,6 +65,16 @@ case "$MODE" in
     ;;
 esac
 
+# Snapshot project state BEFORE Codex run so verify gate can compute the
+# real Codex delta (not the total dirty-tree state). Eliminates the
+# "REVIEW: 27 files changed but Codex output not explicit" false-positive
+# when working tree already had pending edits unrelated to Codex.
+BEFORE_SNAPSHOT=""
+if [ -d "$PROJECT/.git" ]; then
+  BEFORE_SNAPSHOT="$(mktemp -t codex-before.XXXXXX)"
+  git -C "$PROJECT" status --porcelain > "$BEFORE_SNAPSHOT" 2>/dev/null || true
+fi
+
 {
   echo "# Codex Result"
   echo
@@ -87,8 +97,11 @@ echo "Saved result: $RESULT"
 
 # Anti-hallucination gate: capture real git diff in target project + flag
 # claim/diff mismatches. Read-only; never fails the parent. Disable via
-# AI_BRIDGE_VERIFY=0.
+# AI_BRIDGE_VERIFY=0. Pass before-snapshot so verify can compute real delta.
 if [ "${AI_BRIDGE_VERIFY:-1}" = "1" ] && [ -x "$ROOT/scripts/verify-codex-result.sh" ]; then
   echo
-  "$ROOT/scripts/verify-codex-result.sh" "$PROJECT" "$RESULT" || true
+  CODEX_BEFORE_SNAPSHOT="$BEFORE_SNAPSHOT" "$ROOT/scripts/verify-codex-result.sh" "$PROJECT" "$RESULT" || true
 fi
+
+# Cleanup snapshot tmpfile
+[ -n "$BEFORE_SNAPSHOT" ] && rm -f "$BEFORE_SNAPSHOT" 2>/dev/null || true

@@ -82,17 +82,38 @@ else
 fi
 
 if [ "$IS_GIT" -eq 1 ]; then
-  CHANGED=$(git status --short 2>/dev/null | wc -l | tr -d ' ')
+  CHANGED_TOTAL=$(git status --short 2>/dev/null | wc -l | tr -d ' ')
   STAGED=$(git diff --cached --shortstat 2>/dev/null || echo "")
   UNSTAGED=$(git diff --shortstat 2>/dev/null || echo "")
   UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' ')
   DIFF_PREVIEW=$(git diff --no-color 2>/dev/null | head -60 || true)
+
+  # Compute Codex-only delta when caller provided a pre-run snapshot.
+  # Snapshot path comes via CODEX_BEFORE_SNAPSHOT env (set by delegate-to-codex.sh).
+  # Delta = files in current `git status --short` that were NOT in before snapshot.
+  if [ -n "${CODEX_BEFORE_SNAPSHOT:-}" ] && [ -f "${CODEX_BEFORE_SNAPSHOT}" ]; then
+    CURRENT_SNAP=$(mktemp -t codex-after.XXXXXX)
+    git status --porcelain 2>/dev/null > "$CURRENT_SNAP" || true
+    # diff returns 1 when differences exist — swallow with || true
+    CHANGED=$(diff <(sort "$CODEX_BEFORE_SNAPSHOT") <(sort "$CURRENT_SNAP") 2>/dev/null | grep -cE '^>' || true)
+    CHANGED="${CHANGED:-0}"
+    DELTA_PREVIEW=$(diff <(sort "$CODEX_BEFORE_SNAPSHOT") <(sort "$CURRENT_SNAP") 2>/dev/null | grep -E '^>' | head -20 | sed 's/^> //' || true)
+    SNAPSHOT_USED=1
+    rm -f "$CURRENT_SNAP" 2>/dev/null || true
+  else
+    CHANGED="$CHANGED_TOTAL"
+    DELTA_PREVIEW=""
+    SNAPSHOT_USED=0
+  fi
 else
   CHANGED=0
+  CHANGED_TOTAL=0
   STAGED=""
   UNSTAGED=""
   UNTRACKED=0
   DIFF_PREVIEW=""
+  DELTA_PREVIEW=""
+  SNAPSHOT_USED=0
 fi
 
 # Result file metrics
@@ -155,7 +176,22 @@ fi
   echo "## Git diff facts"
   echo
   if [ "$IS_GIT" -eq 1 ]; then
-    echo "- Changed paths: $CHANGED"
+    if [ "$SNAPSHOT_USED" -eq 1 ]; then
+      echo "- Changed paths (Codex delta): $CHANGED"
+      echo "- Total dirty paths in tree: $CHANGED_TOTAL (pre-existing + Codex)"
+      echo "- Snapshot mode: ENABLED (before/after diff)"
+      if [ -n "$DELTA_PREVIEW" ]; then
+        echo
+        echo "### Codex-only delta (first 20 status lines)"
+        echo
+        echo '```'
+        printf '%s\n' "$DELTA_PREVIEW"
+        echo '```'
+      fi
+    else
+      echo "- Changed paths: $CHANGED"
+      echo "- Snapshot mode: disabled (no pre-run snapshot — verdict uses total tree state)"
+    fi
     echo "- Untracked (new) files: $UNTRACKED"
     echo "- Unstaged: ${UNSTAGED:-none}"
     echo "- Staged: ${STAGED:-none}"
