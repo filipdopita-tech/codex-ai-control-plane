@@ -84,3 +84,11 @@ esac
 
 echo
 echo "Saved result: $RESULT"
+
+# Anti-hallucination gate: capture real git diff in target project + flag
+# claim/diff mismatches. Read-only; never fails the parent. Disable via
+# AI_BRIDGE_VERIFY=0.
+if [ "${AI_BRIDGE_VERIFY:-1}" = "1" ] && [ -x "$ROOT/scripts/verify-codex-result.sh" ]; then
+  echo
+  "$ROOT/scripts/verify-codex-result.sh" "$PROJECT" "$RESULT" || true
+fi

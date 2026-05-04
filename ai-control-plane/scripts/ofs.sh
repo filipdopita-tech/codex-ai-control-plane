@@ -340,6 +340,21 @@ cmd_handoff() {
   cat "$full"
 }
 
+# Manually re-run anti-halucination gate against last (or specific) result.
+# Captures real git diff in target project + flags claim/diff mismatches.
+cmd_verify() {
+  local project="$WORKSPACE_DEFAULT" result_file=""
+  if [ "${1:-}" = "--here" ]; then
+    project="$WORKSPACE_DEFAULT"; shift
+  elif [ -d "${1:-}" ]; then
+    project="$1"; shift
+  fi
+  result_file="${1:-}"
+  validate_project "$project"
+  log "verify" "start" "$project"
+  "$ROOT/scripts/verify-codex-result.sh" "$project" "$result_file"
+}
+
 cmd_phone() {
   cat <<'EOF'
 Phone control plane — 3 cesty od nejjednodušší k nejmocnější:
@@ -567,6 +582,7 @@ COMMANDS
     update              run update-core (gcloud + VS Code ext + brew + doctor)
     handoffs [N]        list last N handoffs (default 10)
     handoff <file>      tail specific handoff
+    verify [path]       anti-halucination gate: real git diff vs Codex claim
     logs [N]            tail ofs audit log (default 30)
 
   Mobile
@@ -647,6 +663,7 @@ case "${1:-help}" in
   doctor|dr)   shift; cmd_doctor "$@" ;;
   handoffs|h)  shift; cmd_handoffs "$@" ;;
   handoff)     shift; cmd_handoff "$@" ;;
+  verify|ver)  shift; cmd_verify "$@" ;;
   logs|l)      shift; cmd_logs "$@" ;;
   phone|p)     shift; cmd_phone "$@" ;;
   mobile|mob)  shift; cmd_mobile "$@" ;;

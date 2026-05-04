@@ -57,12 +57,27 @@ $TASK
 
 ## Operating Rules
 
-- Read relevant files first.
-- Change only what is necessary for this task.
-- Do not print or copy secrets.
-- Prefer existing project patterns.
-- Run available tests or a project healthcheck.
-- Finish with changed files, verification, and residual risks.
+- Read relevant files first; do not assume structure.
+- Change only what is necessary for this task. No drive-by refactors.
+- Do not print, copy, or include secrets, tokens, .env values in the report.
+- Prefer existing project patterns and conventions.
+- Run available tests, lint, or a project healthcheck after edits.
+- Stop on the first irrecoverable error and report it instead of guessing.
+
+## Required Report Sections
+
+End your output with these four sections, in this order:
+
+1. **Changed files** — list of files touched (\`path:lines\` if surgical), with one-line per-file rationale.
+2. **Verification run** — exact commands you ran (tests, build, healthcheck) plus their pass/fail outcome.
+3. **Confidence** — per non-trivial claim, tag one of:
+   - \`[VERIFIED]\` ran in this handoff and observed result
+   - \`[LIKELY]\` based on code reading, not executed
+   - \`[GUESS]\` heuristic, low evidence
+   - \`[UNCERTAIN]\` unable to verify; needs human follow-up
+4. **Residual risk** — what could still break (edge cases, untested paths, integrations).
+
+If a section has no content, state \`none\` explicitly. Do not omit sections.
 
 ## Suggested Command
 
