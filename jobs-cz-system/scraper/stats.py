@@ -77,8 +77,11 @@ def collect_week(results_root: Path, days: int = 7) -> List[Dict[str, str | int]
     return out
 
 
-def top_companies_today(results_root: Path, limit: int = 25) -> List[dict]:
-    """Top X firem napříč všemi searches dnes (highest score, dedup by name)."""
+def top_companies_today(results_root: Path, limit: int = 25, by: str = "warm") -> List[dict]:
+    """Top X firem napříč všemi searches dnes.
+
+    by: "warm" (warm_score primary), "score" (raw _score), "positions" (count)
+    """
     today = datetime.now().strftime("%Y-%m-%d")
     today_dir = results_root / today
     if not today_dir.exists():
@@ -95,24 +98,68 @@ def top_companies_today(results_root: Path, limit: int = 25) -> List[dict]:
                 co = (row.get("company") or "").strip()
                 if not co:
                     continue
+                warm = int(row.get("warm_score", 0) or 0)
                 score = int(row.get("best_score", 0) or 0)
                 pos = int(row.get("open_positions", 0) or 0)
                 existing = by_company.get(co)
-                existing_score = int(existing.get("best_score", 0) or 0) if existing else -1
-                if not existing or score > existing_score:
+                existing_warm = int(existing.get("warm_score", 0) or 0) if existing else -1
+                if not existing or warm > existing_warm:
                     new_row = dict(row)
                     new_row["source_searches"] = sub.name
+                    new_row["warm_score"] = warm
                     new_row["best_score"] = score
                     by_company[co] = new_row
                 else:
-                    # Append source search
-                    src = existing.get("source_searches", "")
-                    if sub.name not in src:
-                        existing["source_searches"] = src + ", " + sub.name
+                    sources = existing.get("source_searches", "")
+                    if sub.name not in sources:
+                        existing["source_searches"] = sources + ", " + sub.name
                     existing["open_positions"] = int(existing.get("open_positions", 0) or 0) + pos
     rows = list(by_company.values())
-    rows.sort(key=lambda x: (-int(x.get("best_score", 0) or 0), -int(x.get("open_positions", 0) or 0)))
+    if by == "score":
+        rows.sort(key=lambda x: (-int(x.get("best_score", 0) or 0), -int(x.get("open_positions", 0) or 0)))
+    elif by == "positions":
+        rows.sort(key=lambda x: (-int(x.get("open_positions", 0) or 0), -int(x.get("warm_score", 0) or 0)))
+    else:
+        rows.sort(key=lambda x: (-int(x.get("warm_score", 0) or 0), -int(x.get("best_score", 0) or 0), -int(x.get("open_positions", 0) or 0)))
     return rows[:limit]
+
+
+def warm_signal_breakdown(results_root: Path) -> Dict[str, int]:
+    """Aggregate warm signal counts across today's leads."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    today_dir = results_root / today
+    counters = {"urgent": 0, "senior_role": 0, "salary_disclosed": 0, "reposted": 0,
+                "cross_portal": 0, "high_warm_50": 0, "total_leads": 0}
+    if not today_dir.exists():
+        return counters
+    seen_companies = set()
+    for sub in sorted(today_dir.glob("*")):
+        if not sub.is_dir():
+            continue
+        leads_f = sub / "leads.csv"
+        if not leads_f.exists():
+            continue
+        with open(leads_f, encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                co = (row.get("company") or "").strip().lower()
+                if not co or co in seen_companies:
+                    continue
+                seen_companies.add(co)
+                counters["total_leads"] += 1
+                sigs = (row.get("warm_signals") or "")
+                if "urgent" in sigs:
+                    counters["urgent"] += 1
+                if "senior_role" in sigs:
+                    counters["senior_role"] += 1
+                if "salary_disclosed" in sigs:
+                    counters["salary_disclosed"] += 1
+                if "reposted" in sigs:
+                    counters["reposted"] += 1
+                if "cross_portal" in sigs:
+                    counters["cross_portal"] += 1
+                if int(row.get("warm_score", 0) or 0) >= 50:
+                    counters["high_warm_50"] += 1
+    return counters
 
 
 def render_dashboard(results_root: Path, ntfy_history: int = 7) -> str:
@@ -120,7 +167,8 @@ def render_dashboard(results_root: Path, ntfy_history: int = 7) -> str:
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
     today_data = collect_today(results_root)
     week_data = collect_week(results_root, days=ntfy_history)
-    top = top_companies_today(results_root, limit=20)
+    top = top_companies_today(results_root, limit=20, by="warm")
+    warm_breakdown = warm_signal_breakdown(results_root)
 
     lines = [
         f"# jobs.cz Daily Dashboard | {today}",
@@ -153,17 +201,46 @@ def render_dashboard(results_root: Path, ntfy_history: int = 7) -> str:
 
     lines.extend([
         "",
-        f"## Top {len(top)} firem dnes (cross-search, podle nejvyššího skóre + počtu pozic)",
+        f"## Warm signal breakdown ({warm_breakdown.get('total_leads', 0)} unique firem)",
         "",
-        "| # | Firma | Pozic | Score | Source searches | Lokality |",
-        "|---|---|---|---|---|---|",
+        f"- 🔥 **High warm (score >=50)**: {warm_breakdown.get('high_warm_50', 0)}",
+        f"- ⚡ **Urgent keywords**: {warm_breakdown.get('urgent', 0)}",
+        f"- 👑 **Senior role (CMO/CFO/Head of/Director/Lead)**: {warm_breakdown.get('senior_role', 0)}",
+        f"- 💰 **Salary disclosed**: {warm_breakdown.get('salary_disclosed', 0)}",
+        f"- 🔁 **Reposted (still hiring 2+ days)**: {warm_breakdown.get('reposted', 0)}",
+        f"- 🌐 **Cross-portal (jobs.cz + prace.cz / startupjobs)**: {warm_breakdown.get('cross_portal', 0)}",
+        "",
+        f"## Top {len(top)} HOT LEADS dnes (warm_score primary)",
+        "",
+        "| # | Firma | Pozic | Warm | Score | Signals | Portals | Source searches |",
+        "|---|---|---|---|---|---|---|---|",
     ])
     for i, r in enumerate(top, 1):
-        co = r.get("company", "?")
+        co = (r.get("company") or "?")[:40]
         pos = r.get("open_positions", "0")
+        warm = r.get("warm_score", "0")
         score = r.get("best_score", "0")
-        src = r.get("source_searches", "")
-        loc = (r.get("locations") or "")[:60]
-        lines.append(f"| {i} | {co} | {pos} | {score} | {src} | {loc} |")
+        sigs = (r.get("warm_signals") or "")[:50]
+        portals = (r.get("portals_seen") or "")[:25]
+        sources = (r.get("source_searches") or "")[:35]
+        lines.append(f"| {i} | {co} | {pos} | {warm} | {score} | {sigs} | {portals} | {sources} |")
+
+    # Cross-portal champions section
+    cross = [r for r in top if "," in (r.get("portals_seen") or "")]
+    if cross:
+        lines.extend([
+            "",
+            f"## Cross-portal champions ({len(cross)} firmy hledající napříč 2+ portály = silný pain signal)",
+            "",
+            "| Firma | Pozic | Warm | Portals | Pozice |",
+            "|---|---|---|---|---|",
+        ])
+        for r in cross[:15]:
+            co = (r.get("company") or "?")[:35]
+            pos = r.get("open_positions", "0")
+            warm = r.get("warm_score", "0")
+            portals = r.get("portals_seen", "")
+            positions = (r.get("positions") or "")[:60]
+            lines.append(f"| {co} | {pos} | {warm} | {portals} | {positions} |")
 
     return "\n".join(lines)

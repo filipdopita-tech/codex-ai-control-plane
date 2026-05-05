@@ -240,7 +240,9 @@ cmd_delegate() {
   [ -z "$task" ] && { color red "Usage: ofs delegate [project_path] \"task\""; echo; exit 1; }
   validate_project "$project"
   log "delegate" "start" "$task"
-  AI_BRIDGE_CODEX_MODE="$mode" "$ROOT/scripts/delegate-to-codex.sh" "$project" "$task"
+  # B2 (2026-05-05): export BRIDGE_CALLER=ofs so inline telemetry distinguishes
+  # ofs|codex|cx invocations from cost-tracker/skill/direct call paths.
+  BRIDGE_CALLER="ofs" AI_BRIDGE_CODEX_MODE="$mode" "$ROOT/scripts/delegate-to-codex.sh" "$project" "$task"
 }
 
 cmd_review() {
@@ -675,7 +677,8 @@ LIB_DIR="$ROOT/scripts/lib"
 case "${1:-help}" in
   status|s)    shift; cmd_status "$@" ;;
   route|r)     shift; cmd_route "$@" ;;
-  delegate|d)  shift; cmd_delegate "$@" ;;
+  delegate|d|codex|cx)  shift; cmd_delegate "$@" ;;
+  bridge-utilization|bu) shift; exec "$HOME/scripts/automation/bridge-utilization-summary.sh" "$@" ;;
   review|rv)   shift; cmd_review "$@" ;;
   strategy|st) shift; cmd_strategy "$@" ;;
   mac|m)       shift; cmd_mac "$@" ;;

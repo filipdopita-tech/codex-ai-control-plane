@@ -33,5 +33,10 @@
     "junior specialist",
     "social media specialist junior"
   ],
-  "exclude_companies": []
+  "exclude_companies": [],
+  "portals": [
+    "jobs.cz",
+    "prace.cz",
+    "startupjobs"
+  ]
 }

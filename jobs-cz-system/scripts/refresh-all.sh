@@ -17,7 +17,7 @@ mkdir -p "$(dirname "$LOG")"
 
     # Master leads merge + ARES enrichment + stats dashboard (Obsidian sync)
     "$ROOT/jobs.sh" export-all   || echo "[WARN] export-all failed"
-    "$ROOT/jobs.sh" enrich-today --limit 30 || echo "[WARN] enrich-today failed"
+    "$ROOT/jobs.sh" enrich-today --limit 999 || echo "[WARN] enrich-today failed"
     "$ROOT/jobs.sh" stats > /tmp/jobs-cz-stats.md 2>&1 || echo "[WARN] stats failed"
     exit $rc
 } 2>&1 | tee -a "$LOG"

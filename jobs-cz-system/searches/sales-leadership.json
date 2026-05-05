@@ -37,5 +37,10 @@
     "call center",
     "sales representative junior"
   ],
-  "exclude_companies": []
+  "exclude_companies": [],
+  "portals": [
+    "jobs.cz",
+    "prace.cz",
+    "startupjobs"
+  ]
 }

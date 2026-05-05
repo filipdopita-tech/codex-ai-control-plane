@@ -79,6 +79,8 @@ if [ -d "$PROJECT/.git" ]; then
   BEFORE_HEAD="$(git -C "$PROJECT" rev-parse HEAD 2>/dev/null || true)"
 fi
 
+START_EPOCH="$(date +%s)"
+
 {
   echo "# Codex Result"
   echo
@@ -102,6 +104,7 @@ echo "Saved result: $RESULT"
 # Anti-hallucination gate: capture real git diff in target project + flag
 # claim/diff mismatches. Read-only; never fails the parent. Disable via
 # AI_BRIDGE_VERIFY=0. Pass before-snapshot so verify can compute real delta.
+DELEGATE_EXIT_CODE=$?
 if [ "${AI_BRIDGE_VERIFY:-1}" = "1" ] && [ -x "$ROOT/scripts/verify-codex-result.sh" ]; then
   echo
   CODEX_BEFORE_SNAPSHOT="$BEFORE_SNAPSHOT" \
@@ -109,5 +112,71 @@ if [ "${AI_BRIDGE_VERIFY:-1}" = "1" ] && [ -x "$ROOT/scripts/verify-codex-result
     "$ROOT/scripts/verify-codex-result.sh" "$PROJECT" "$RESULT" || true
 fi
 
+# ─── INLINE TELEMETRY (Wave 2 — universal, works for ALL callers) ───
+# Skip if BRIDGE_TELEMETRY_OFF=1 OR if invoked from cost-tracker (which has its own logging — back-compat).
+if [ "${BRIDGE_TELEMETRY_OFF:-0}" != "1" ] && [ "${COST_TRACKER_INVOKING:-0}" != "1" ]; then
+  END_EPOCH="$(date +%s)"
+  DURATION=$((END_EPOCH - ${START_EPOCH:-$END_EPOCH}))
+  TELEMETRY_LOG="$HOME/.claude/logs/bridge-utilization.jsonl"
+  mkdir -p "$(dirname "$TELEMETRY_LOG")" 2>/dev/null
+
+  # Files changed delta (relative to BEFORE_SNAPSHOT) — count net new modifications
+  FILES_CHANGED=0
+  if [ -d "$PROJECT/.git" ] && [ -n "$BEFORE_SNAPSHOT" ] && [ -f "$BEFORE_SNAPSHOT" ]; then
+    AFTER_COUNT="$(git -C "$PROJECT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    BEFORE_COUNT="$(wc -l < "$BEFORE_SNAPSHOT" 2>/dev/null | tr -d ' ')"
+    FILES_CHANGED=$((AFTER_COUNT - BEFORE_COUNT))
+    [ "$FILES_CHANGED" -lt 0 ] && FILES_CHANGED=0
+  fi
+
+  RESULT_KB=0
+  [ -f "$RESULT" ] && RESULT_KB="$(du -k "$RESULT" 2>/dev/null | awk '{print $1}')"
+
+  PROJECT_SHORT="$(basename "$PROJECT")"
+  TASK_CHARS=${#TASK}
+  ESC_PROJECT="$(printf '%s' "$PROJECT" | sed 's/"/\\"/g')"
+  ESC_PROJECT_SHORT="$(printf '%s' "$PROJECT_SHORT" | sed 's/"/\\"/g')"
+  ESC_HANDOFF="$(printf '%s' "${HANDOFF:-}" | sed 's/"/\\"/g')"
+  ESC_RESULT="$(printf '%s' "${RESULT:-}" | sed 's/"/\\"/g')"
+
+  # B3 (2026-05-05): atomic write via mkdir-lock + handoff-path dedup.
+  # Handoff is timestamp-unique, so dedup only fires on retry/double-emit
+  # within the same script invocation. Lock bounds concurrent telemetry
+  # writes from parallel delegates (no torn-line risk on JSONL append).
+  ALREADY_LOGGED=0
+  if [ -n "$ESC_HANDOFF" ] && [ -f "$TELEMETRY_LOG" ]; then
+    if tail -n 200 "$TELEMETRY_LOG" 2>/dev/null | grep -qF "\"handoff\":\"$ESC_HANDOFF\""; then
+      ALREADY_LOGGED=1
+    fi
+  fi
+
+  if [ "$ALREADY_LOGGED" = "0" ]; then
+    LOCK_DIR="${TELEMETRY_LOG}.lock"
+    LOCK_OK=0
+    for _try in 1 2 3 4 5; do
+      if mkdir "$LOCK_DIR" 2>/dev/null; then
+        LOCK_OK=1
+        break
+      fi
+      # stale-lock GC (>30s old)
+      if [ -d "$LOCK_DIR" ]; then
+        LOCK_AGE=$(($(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || echo 0)))
+        [ "$LOCK_AGE" -gt 30 ] && rmdir "$LOCK_DIR" 2>/dev/null
+      fi
+      sleep 0.3
+    done
+
+    printf '{"ts":"%s","event":"delegate","project":"%s","project_short":"%s","mode":"%s","task_chars":%s,"duration_s":%s,"exit_code":%s,"files_changed":%s,"result_kb":%s,"handoff":"%s","result":"%s","caller":"%s"}\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "$ESC_PROJECT" "$ESC_PROJECT_SHORT" "$MODE" "$TASK_CHARS" "$DURATION" "$DELEGATE_EXIT_CODE" \
+      "$FILES_CHANGED" "$RESULT_KB" "$ESC_HANDOFF" "$ESC_RESULT" "${BRIDGE_CALLER:-direct}" \
+      >> "$TELEMETRY_LOG" 2>/dev/null || true
+
+    [ "$LOCK_OK" = "1" ] && rmdir "$LOCK_DIR" 2>/dev/null || true
+  fi
+fi
+
 # Cleanup snapshot tmpfile
 [ -n "$BEFORE_SNAPSHOT" ] && rm -f "$BEFORE_SNAPSHOT" 2>/dev/null || true
+
+exit ${DELEGATE_EXIT_CODE:-0}

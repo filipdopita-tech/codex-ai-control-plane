@@ -45,5 +45,10 @@
     "telefonický",
     "call center"
   ],
-  "exclude_companies": []
+  "exclude_companies": [],
+  "portals": [
+    "jobs.cz",
+    "prace.cz",
+    "startupjobs"
+  ]
 }

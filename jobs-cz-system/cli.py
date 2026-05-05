@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -30,12 +31,14 @@ SAVED = ROOT / "searches"
 RESULTS = ROOT / "results"
 sys.path.insert(0, str(ROOT))
 
-from scraper.search import search  # noqa: E402
+from scraper.multi import search_multi, ALL_PORTALS  # noqa: E402
 from scraper.filters import apply_filters, dedupe  # noqa: E402
 from scraper.leads import to_leads, write_leads_csv  # noqa: E402
 from scraper.notifier import push  # noqa: E402
 from scraper.stats import collect_today, collect_week, top_companies_today, render_dashboard  # noqa: E402
 from scraper.enrich import enrich_detail_top, enrich_leads_with_ares  # noqa: E402
+from scraper.scoring import score_cards, warm_summary  # noqa: E402
+from scraper.history import get_conn as _get_history_conn, upsert_cards, log_run  # noqa: E402
 
 OBSIDIAN_DASHBOARD = Path("/mac/Documents/OneFlow-Vault/00-Claude-Dashboard/Jobs-CZ-Dashboard.md")
 SESSION_PATH = "/root/.credentials/jobs_cz_session.json"
@@ -71,11 +74,18 @@ def _write_csv(rows: list, path: Path) -> None:
     if not rows:
         path.write_text("# žádné výsledky po filtraci\n", encoding="utf-8")
         return
-    keys = ["title", "company", "location", "salary", "posted", "url", "_score", "snippet"]
+    keys = ["title", "company", "location", "salary", "posted", "url", "_score", "_warm_score",
+            "_warm_signals", "source_portal", "jobad_id", "contact_email", "contact_phone", "snippet"]
+    serializable = []
+    for r in rows:
+        rr = {k: r.get(k, "") for k in keys}
+        if isinstance(rr.get("_warm_signals"), list):
+            rr["_warm_signals"] = ", ".join(rr["_warm_signals"])
+        serializable.append(rr)
     with open(path, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=keys, extrasaction="ignore")
         w.writeheader()
-        w.writerows(rows)
+        w.writerows(serializable)
 
 
 def _write_summary(path: Path, name: str, cards: list, filtered: list, leads: list) -> None:
@@ -132,11 +142,13 @@ def _diff_with_prev(name: str, filtered_today: list) -> list:
 # ---------- subcommands ----------
 
 def cmd_search(args) -> None:
-    print(f"[SEARCH] query={args.query!r} location={args.location or '-'} pages={args.pages}")
-    cards = search(
+    portals = (args.portal or "jobs.cz").split(",")
+    print(f"[SEARCH] query={args.query!r} location={args.location or '-'} pages={args.pages} portals={portals}")
+    cards = search_multi(
         args.query,
         location=args.location,
         max_pages=args.pages,
+        portals=portals,
         use_session=not args.no_session,
     )
     cards = dedupe(cards)
@@ -150,6 +162,13 @@ def cmd_search(args) -> None:
         filtered = list(cards)
     print(f"[FILTERED] {len(filtered)} after filters")
 
+    # warm scoring with history-driven signals
+    _hconn = _get_history_conn()
+    score_cards(filtered, _hconn)
+    upsert_cards(_hconn, filtered, args.name or args.query)
+    log_run(_hconn, args.name or args.query, ",".join(portals),
+            len(cards), len(filtered), len({c.get("company","").lower() for c in filtered if c.get("company")}),
+            0, 0)
     out = _save_results(args.name or args.query, cards, filtered)
     print(f"[OUT] {out}")
     print(f"  → leads.csv  ({len(to_leads(filtered))} firem)")
@@ -172,11 +191,13 @@ def cmd_run_saved(args) -> None:
         print(f"  Dostupné: {[p.stem for p in SAVED.glob('*.json')]}")
         sys.exit(2)
     cfg = json.loads(f.read_text(encoding="utf-8"))
-    print(f"[RUN] {cfg['name']} — query={cfg.get('query')!r}")
-    cards = search(
+    portals = cfg.get("portals") or ["jobs.cz"]
+    print(f"[RUN] {cfg['name']} — query={cfg.get('query')!r} portals={portals}")
+    cards = search_multi(
         cfg["query"],
         location=cfg.get("location"),
         max_pages=cfg.get("max_pages", 10),
+        portals=portals,
         use_session=cfg.get("use_session", True),
     )
     cards = dedupe(cards)
@@ -188,6 +209,14 @@ def cmd_run_saved(args) -> None:
         min_score=cfg.get("min_score", 1),
     )
     print(f"[FETCHED] {len(cards)} | [FILTERED] {len(filtered)}")
+    _hconn = _get_history_conn()
+    score_cards(filtered, _hconn)
+    upsert_counts = upsert_cards(_hconn, filtered, cfg["name"])
+    log_run(_hconn, cfg["name"], ",".join(portals),
+            len(cards), len(filtered), len({c.get("company","").lower() for c in filtered if c.get("company")}),
+            upsert_counts.get("new_companies", 0), upsert_counts.get("new_jobads", 0))
+    summ = warm_summary(filtered)
+    print(f"[WARM] high>=50:{summ['high_warm']} urgent:{summ['urgent']} senior:{summ['senior_role']} salary:{summ['salary_disclosed']} reposted:{summ['reposted']} cross_portal:{summ['cross_portal']}")
     out = _save_results(cfg["name"], cards, filtered)
     diff_new = _diff_with_prev(cfg["name"], filtered)
     print(f"[NEW vs prev] {len(diff_new)} brand-new listings")
@@ -306,6 +335,109 @@ def cmd_enrich_today(args) -> None:
     print(f"\n[DONE] ARES match total: {total}")
 
 
+def cmd_diff(args) -> None:
+    """Cross-day diff: NEW companies + REPOSTED jobs + DROPPED companies."""
+    today_dir = RESULTS / _today()
+    today_master = today_dir / "MASTER_LEADS.csv"
+    if not today_master.exists():
+        print(f"[ERROR] dnes ještě neproběhl export-all ({today_master})")
+        sys.exit(2)
+
+    days_back = max(1, args.days)
+    today_companies = {}
+    today_jobads = set()
+    with open(today_master, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            co = (row.get("company") or "").strip()
+            if co:
+                today_companies[co.lower()] = row
+            for url in (row.get("all_urls") or "").split(" | "):
+                if "/rpd/" in url:
+                    m = re.search(r"/rpd/(\d+)", url)
+                    if m:
+                        today_jobads.add(f"jobs.cz:{m.group(1)}")
+                elif "/nabidka/" in url:
+                    m = re.search(r"/nabidka/([a-f0-9-]+)", url)
+                    if m:
+                        today_jobads.add(f"prace.cz:{m.group(1)}")
+
+    history_companies = {}
+    history_jobads = {}
+    days_seen = []
+    today_str = _today()
+    for day_dir in sorted(RESULTS.glob("*"), reverse=True):
+        if day_dir.name >= today_str:
+            continue
+        if not day_dir.is_dir():
+            continue
+        master = day_dir / "MASTER_LEADS.csv"
+        if not master.exists():
+            continue
+        days_seen.append(day_dir.name)
+        with open(master, encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                co = (row.get("company") or "").strip().lower()
+                if co:
+                    history_companies.setdefault(co, set()).add(day_dir.name)
+                for url in (row.get("all_urls") or "").split(" | "):
+                    if "/rpd/" in url:
+                        m = re.search(r"/rpd/(\d+)", url)
+                        if m:
+                            history_jobads.setdefault(f"jobs.cz:{m.group(1)}", set()).add(day_dir.name)
+                    elif "/nabidka/" in url:
+                        m = re.search(r"/nabidka/([a-f0-9-]+)", url)
+                        if m:
+                            history_jobads.setdefault(f"prace.cz:{m.group(1)}", set()).add(day_dir.name)
+        if len(days_seen) >= days_back:
+            break
+
+    new_companies = [(co, row) for co, row in today_companies.items() if co not in history_companies]
+    reposted = [(jid, history_jobads[jid]) for jid in today_jobads if jid in history_jobads]
+    last_day = days_seen[0] if days_seen else None
+    dropped = []
+    if last_day:
+        with open(RESULTS / last_day / "MASTER_LEADS.csv", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                co = (row.get("company") or "").strip().lower()
+                if co and co not in today_companies:
+                    dropped.append((co, row))
+
+    print(f"=== jobs-cz diff (today={today_str}, history window={days_back}d, days seen={days_seen}) ===\n")
+    print(f"NEW companies (first time): {len(new_companies)}")
+    for co, row in new_companies[:25]:
+        print(f"  + {row.get('company')} | {row.get('open_positions')} pozic | score={row.get('best_score')} | {row.get('portals_seen', '?')}")
+    if len(new_companies) > 25:
+        print(f"  ... and {len(new_companies) - 25} more")
+
+    print(f"\nREPOSTED jobads (still open from prior days = pain signal): {len(reposted)}")
+    for jid, days_set in sorted(reposted, key=lambda x: -len(x[1]))[:15]:
+        print(f"  ~ {jid} (also seen: {', '.join(sorted(days_set))})")
+
+    print(f"\nDROPPED companies (yesterday {last_day} -> today gone): {len(dropped)}")
+    for co, row in dropped[:15]:
+        print(f"  - {row.get('company')} | was {row.get('open_positions')} pozic | last seen yesterday")
+
+    diff_md = today_dir / "DIFF.md"
+    lines = [
+        f"# jobs-cz DIFF | {today_str}",
+        f"",
+        f"Window: last {days_back} day(s) — days_seen={days_seen}",
+        f"",
+        f"## NEW companies ({len(new_companies)})",
+        "",
+    ]
+    for co, row in new_companies:
+        lines.append(f"- **{row.get('company')}** — {row.get('open_positions')} pozic, score {row.get('best_score')}, portals: {row.get('portals_seen', '?')}")
+    lines.extend(["", f"## REPOSTED jobads ({len(reposted)})", ""])
+    for jid, days_set in sorted(reposted, key=lambda x: -len(x[1])):
+        lines.append(f"- `{jid}` seen on: {', '.join(sorted(days_set))}")
+    lines.extend(["", f"## DROPPED companies ({len(dropped)})", ""])
+    for co, row in dropped:
+        lines.append(f"- {row.get('company')} (had {row.get('open_positions')} pozic)")
+    diff_md.write_text("\n".join(lines), encoding="utf-8")
+    print(f"\n[OUT] {diff_md}")
+
+
 def cmd_export_all(args) -> None:
     """Sloučí leads ze všech saved searches dnešního dne do master leads list."""
     today_dir = RESULTS / _today()
@@ -355,6 +487,7 @@ def main() -> None:
     sp.add_argument("--name", default=None, help="output folder name")
     sp.add_argument("--no-session", action="store_true", help="skip Filip's logged-in session")
     sp.add_argument("--no-notify", action="store_true")
+    sp.add_argument("--portal", default="jobs.cz", help="comma-sep: jobs.cz,prace.cz,all (default jobs.cz)")
     sp.set_defaults(func=cmd_search)
 
     sp = sub.add_parser("run", help="run saved search by name")
@@ -373,6 +506,10 @@ def main() -> None:
 
     sp = sub.add_parser("export-all", help="merge today's leads → MASTER_LEADS.csv")
     sp.set_defaults(func=cmd_export_all)
+
+    sp = sub.add_parser("diff", help="cross-day diff: NEW companies + REPOSTED jobads + DROPPED")
+    sp.add_argument("--days", type=int, default=7, help="history window (default 7)")
+    sp.set_defaults(func=cmd_diff)
 
     sp = sub.add_parser("stats", help="cross-search dashboard (dnes + trend + top firmy)")
     sp.add_argument("--days", type=int, default=7, help="historical trend window (days)")

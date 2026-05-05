@@ -1,0 +1,97 @@
+%%
+%% This is the AFNIC Whois server.
+%%
+%% complete date format: YYYY-MM-DDThh:mm:ssZ
+%%
+%% Rights restricted by copyright.
+%% See https://www.afnic.fr/en/domain-names-and-support/everything-there-is-to-know-about-domain-names/find-a-domain-name-or-a-holder-using-whois/
+%%
+%%
+
+domain:                        mementomori.pm
+status:                        ACTIVE
+eppstatus:                     clientTransferProhibited
+hold:                          NO
+holder-c:                      LS31460-FRNIC
+admin-c:                       ANO00-FRNIC
+tech-c:                        PM33310-FRNIC
+registrar:                     Name.com LLC
+Expiry Date:                   2026-12-03T08:48:08Z
+created:                       2019-12-03T08:48:08Z
+last-update:                   2025-11-20T13:42:28.578722Z
+source:                        FRNIC
+
+nserver:                       ns1.bdm.microsoftonline.com
+nserver:                       ns2.bdm.microsoftonline.com
+nserver:                       ns3.bdm.microsoftonline.com
+nserver:                       ns4.bdm.microsoftonline.com
+source:                        FRNIC
+
+registrar:                     Name.com LLC
+address:                       414 14th Street
+address:                       #200
+address:                       80202 DENVER, COLORADO
+country:                       US
+phone:                         +1.3033643669
+fax-no:                        +1.3033643646
+e-mail:                        support@name.com
+website:                       https://name.com
+anonymous:                     No
+registered:                    2005-07-11T00:00:00Z
+source:                        FRNIC
+
+nic-hdl:                       LS31460-FRNIC
+type:                          ORGANIZATION
+contact:                       LOMBARDO s.r.o.
+address:                       Flemingovo namesti 3
+address:                       16000 Praha 6
+country:                       CZ
+phone:                         +420.608967923
+e-mail:                        petr@petrmara.com
+registrar:                     Name.com LLC
+anonymous:                     NO
+obsoleted:                     NO
+eppstatus:                     associated
+eppstatus:                     active
+eligstatus:                    not identified
+reachstatus:                   not identified
+source:                        FRNIC
+
+nic-hdl:                       ANO00-FRNIC
+type:                          PERSON
+contact:                       Ano Nymous
+registrar:                     Name.com LLC
+anonymous:                     YES
+remarks:                       -------------- WARNING --------------
+remarks:                       While the registrar knows him/her,
+remarks:                       this person chose to restrict access
+remarks:                       to his/her personal data. So PLEASE,
+remarks:                       don't send emails to Ano Nymous. This
+remarks:                       address is bogus and there is no hope
+remarks:                       of a reply.
+remarks:                       -------------- WARNING --------------
+obsoleted:                     NO
+eppstatus:                     associated
+eppstatus:                     active
+eligstatus:                    not identified
+reachstatus:                   not identified
+source:                        FRNIC
+
+nic-hdl:                       PM33310-FRNIC
+type:                          PERSON
+contact:                       Petr Mara
+address:                       Flemingovo namesti 3
+address:                       16000 Praha 6
+country:                       CZ
+phone:                         +420.608967923
+e-mail:                        petr@petrmara.com
+registrar:                     Name.com LLC
+anonymous:                     NO
+obsoleted:                     NO
+eppstatus:                     associated
+eppstatus:                     active
+eligstatus:                    not identified
+reachstatus:                   not identified
+source:                        FRNIC
+
+>>> Last update of WHOIS database: 2026-05-05T12:55:00.670116Z <<<
