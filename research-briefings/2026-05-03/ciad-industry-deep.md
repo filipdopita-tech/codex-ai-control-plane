@@ -502,6 +502,97 @@ Global AI safety research is mainstream but **institutionally concentrated**. To
 
 **Rationale:** Mix of public + private funding hedges against FTX-like collapses; university affiliation not needed (adds bureaucracy); contract work sustains growth without compromising research.
 
+### Legal Advisor + finální architektura (Šulcův memo 2026-05-04)
+
+**Advisor:** Mgr. et Mgr. Ing. Michal Šulc — Advokát/Partner, ak-vsk.cz
+- Setkání 5.5.2026 (Filip + Šulc face-to-face)
+- Memo přiloženo: `Právní aspekty založení CIAD.docx` (uloženo v `~/Documents/ai-asociace-2026-ADVOKAT-EXPORT/sulc-response-2026-05-04/`)
+- Šulc validoval Filipův 11-audit research balík jako "poměrně robustní smluvní a compliance zázemí"
+
+**Šulcův formal recommendation:**
+
+#### Právní forma + identifikace
+| Položka | Šulc |
+|---|---|
+| Forma | **Ústav dle § 402 občanského zákoníku** |
+| Název | **Český institut pro AI a data z. ú.** (zkráceně CIAD) |
+| Sídlo | Praha 1 |
+| Časová osa založení | 2-3 týdny |
+| Náklady založení | 45-60 tis Kč bez DPH (vč. notáře) |
+
+#### Governance
+- **Správní rada:** Dopita + Šulc + 3rd člen (TBD; recommended AI ethics academic z CVUT/MFF UK)
+- **Ředitel:** Chudoba (NEW stakeholder; TBD identity confirm by Filip)
+- **Poradní orgán:** později ve statutu v2 (flexibility)
+- **Zakladatelé:** TBD (FO Filip osobně vs. PO OneFlow s.r.o. — recommended: 2-3 FO, ne PO kvůli conflict s komerčním subjektem)
+
+#### Účel ústavu (per Šulc)
+> Vzdělávací, certifikační, výzkumná a poradenská činnost v oblasti umělé inteligence; vydávání certifikátů způsobilosti pro AI školitele a mentory; advocacy a zastupování zájmů AI komunity; organizace konferencí.
+
+#### **DUAL-ENTITY ARCHITECTURE** (klíčový strategický decode)
+
+**A) ÚSTAV (CIAD z. ú.)** — non-profit garant odbornosti
+- R&D, know-how, osnovy, publikace, certifikační zkoušky
+- Poskytuje za stejných podmínek všem zájemcům (non-discrimination)
+- Financování: příjmy z certifikací/poradenství + sponzoři/dary + granty (Horizon Europe, TAČR)
+- Trademark CZ 5000 Kč + EUIPO 850 EUR/třída
+
+**B) KOMERČNÍ SUBJEKT (OneFlow s.r.o. nebo nový)** — for-profit scale
+- Pořádá vlastní školení, zve lektory z CIAD
+- Vlastní cenová politika, vlastní platformu, marketing, sales
+- Smlouva s CIAD: paušál za osnovy/lektora/záštitu, rozdíl = revenue komerčního subjektu
+- Branded jako "spolupracující subjekt CIAD" (NIKDY "service backed by CIAD authority" pokud klient přímý kontrakt)
+
+**Analýza dat workflow:**
+1. CIAD = prvotní analýza + vyhodnocení (R&D, neutral)
+2. Komerční subjekt = praktická implementace (náprava, nastavení)
+3. Workaround pokud klient chce přímou CIAD záštitu: lektoři jako FO (samostatná smlouva)
+
+**Certifikace flow:**
+- Komerční subjekt → přípravný kurz (revenue komerčního, mínus paušál pro CIAD)
+- CIAD → zkouška + certifikát (revenue CIAD)
+
+#### Cost breakdown (full Phase I+II, 12-18 měsíců)
+| Položka | Náklad |
+|---|---|
+| Založení (notář + dokumenty) | 45-60 tis |
+| Provoz one-time (smluvní + GDPR + governance) | 85 tis |
+| Provoz recurring (12-18 měs × 5 tis/měs) | 60-90 tis |
+| Smlouvy se sponzory (× 3-5) | 90-300 tis |
+| Smlouvy s lektory (template + custom × N) | 50-150 tis |
+| Smlouva CIAD ↔ komerční subjekt | 30-50 tis |
+| GDPR DPO + registr (recurring) | 30-50 tis |
+| Trademark CZ + EU (~3 třídy) | ~30 tis |
+| Certifikační procesy + zkušební řád | 40-80 tis |
+| Buffer (10-15%) | 50-100 tis |
+| **Total floor (per Šulc "půl milionu plus")** | **510-995 tis Kč** |
+
+#### Comp structure (Šulc role, post-memo v3 framework)
+**Šulc se sám navrhl do správní rady** → comp ≠ jen advokát-na-hodiny.
+1. Board fee 0-5 tis Kč/měs symbolický (non-profit "skryté podnikání" risk)
+2. Legal retainer 5 tis Kč/měs base + 1500-2500 Kč/hod milestone work
+3. Klient pipeline OneFlow → ak-vsk (reciprocal value, non-cash)
+4. Success fee 3-5% z získaných grants (capped)
+5. Trademark + IP services (discounted base rate)
+6. **NO equity, NO revenue share** (governance + tax status risk)
+
+Annual estimate rok 1: 290-640 tis Kč → aligned s "půl milionu plus" floorem.
+
+#### Open Filip questions (před setkáním 5.5.)
+1. Zakladatelé: FO/PO?
+2. 3. člen SR
+3. Poradní orgán ve statutu nebo později
+4. Sponzorský pipeline (Anthropic? Avast Foundation? CZ AI startupy?)
+5. Daňový poradce assignment
+6. Trademark třídy (35/41/42 recommended)
+7. Statut scope (advocacy ANO; certifikační program EXPAND scope)
+
+**Detail implementation plan (timeline + 5-část agenda + Q&A + post-meeting roadmap):**
+`~/Desktop/Codex/research-briefings/2026-05-05/CIAD-SULC-MEMO-IMPLEMENTATION-PLAN.md`
+
+**Memory entry s full memo verbatim + decoding + cross-references:**
+`~/.claude/projects/-Users-filipdopita-Desktop-Codex/memory/project_ciad_sulc_response_2026_05_04.md`
+
 ---
 
 ## 7. CIAD COMPETITIVE POSITIONING
