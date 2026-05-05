@@ -13,9 +13,8 @@ from __future__ import annotations
 import html
 import re
 import time
-from pathlib import Path
-from typing import List, Optional, Union
-from urllib.parse import quote, quote_plus
+from typing import Any, List, Optional, Union
+from urllib.parse import quote
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
@@ -45,7 +44,7 @@ def build_url(query: Union[str, List[str]], location: Optional[str] = None) -> s
     return LISTING + ("?" + "&".join(parts) if parts else "")
 
 
-def _scroll_to_load_all(page_obj, max_scrolls: int = 8, idle_after: int = 3, polite_delay: float = 1.2) -> int:
+def _scroll_to_load_all(page_obj: Any, max_scrolls: int = 8, idle_after: int = 3, polite_delay: float = 1.2) -> int:
     """Scroll to bottom repeatedly until article count stabilizes.
 
     Returns final article count.

@@ -48,6 +48,32 @@ Slash invocation: `codex <project_path> "<task>"` skill (resolves project
 from arg or `$WORKSPACE_DEFAULT` or cwd, picks lean mode by default,
 calls delegate via cost-tracker shim → universal telemetry capture).
 
+⚠️ **Terminal vs Claude Code disambiguation**:
+- Inside Claude Code session: `/codex <project> "<task>"` → invokes the skill
+  wrapper (correct path).
+- In terminal: typing `codex` resolves to OpenAI Codex CLI binary at
+  `/opt/homebrew/bin/codex` — NOT the skill wrapper. Use one of:
+  - `ofs codex <project> "<task>"` (preferred — telemetry path = ofs)
+  - `~/.claude/skills/codex/codex.sh <project> "<task>"` (absolute path)
+  - Direct: `~/Desktop/Codex/ai-control-plane/scripts/delegate-to-codex.sh "$P" "$T"`
+
+Wave 3 polish (added 2026-05-05):
+- Statusline indicator `cd <D>d/<N>n` (today's delegations/nudges, color-coded)
+- Daily ntfy summary 21:30 (D≥5 healthy / D 2-4 light / D≤1+N≥3 warning)
+- Obsidian heatmap `00-Claude-Dashboard/Codex-Heatmap.md` (Mon 04:00 launchd)
+- B1 prefer-deeper-marker: README.md / AGENTS.md count as project-root markers
+  for sub-projekt detection (jobs-cz-system → jobs-cz-system, not /Desktop/Codex)
+- B2 BRIDGE_CALLER enrichment: telemetry differentiates ofs|skill|cost-tracker|direct|legacy
+- B3 atomic JSONL append: mkdir-lock + handoff-path dedup
+- B4 plan-mode skip: `CLAUDE_PLAN_MODE=1` silences nudge hook
+- A2 weekly-retro action item: bridge ratio threshold (🟢≥70% / 🟡 30-70% / 🔴<30%)
+- Legacy backfill: 52 pre-Wave-2 handoffs migrated to telemetry as caller=legacy
+
+Codex CLI version: pinned baseline **codex-cli 0.128.0** (verified 2026-05-05,
+recorded in `ai-control-plane/.codex-cli-pinned-version`). Future upgrades:
+test with `delegate-to-codex.sh ~/Desktop/Codex "ping"` first; if exit 0 +
+output captured + handoff triplet written, upgrade is safe. Otherwise pin back.
+
 Codex/Claude report contract (enforced by handoff template):
 1. Changed files (path:lines + rationale) 2. Verification run (commands+outcome)
 3. Confidence per claim (`[VERIFIED]`/`[LIKELY]`/`[GUESS]`/`[UNCERTAIN]`)

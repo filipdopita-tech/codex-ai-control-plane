@@ -15,7 +15,6 @@ import html
 import json
 import re
 import time
-import urllib.parse
 import urllib.request
 import urllib.error
 from typing import List, Optional, Union
