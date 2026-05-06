@@ -6,7 +6,7 @@ set -euo pipefail
 LOG_DIR="$HOME/.claude/logs"
 OFS_LOG="$LOG_DIR/ofs.jsonl"
 HEAL_LOG="$LOG_DIR/ofs-heal.jsonl"
-USAGE_LOG="$LOG_DIR/usage-tracker.jsonl"
+USAGE_LOG="$LOG_DIR/usage-daily.jsonl"
 RESOURCE_LOG="$LOG_DIR/resource-monitor.jsonl"
 
 usage() {
@@ -41,8 +41,8 @@ while [ $# -gt 0 ]; do
 done
 
 # Cutoff date (UTC ISO8601 prefix YYYY-MM-DD)
-if date -u -v-${DAYS}d '+%Y-%m-%d' >/dev/null 2>&1; then
-  CUTOFF=$(date -u -v-${DAYS}d '+%Y-%m-%d')
+if date -u -v-"${DAYS}"d '+%Y-%m-%d' >/dev/null 2>&1; then
+  CUTOFF=$(date -u -v-"${DAYS}"d '+%Y-%m-%d')
 else
   CUTOFF=$(date -u -d "-${DAYS} days" '+%Y-%m-%d' 2>/dev/null || echo "2026-01-01")
 fi
@@ -136,7 +136,7 @@ color blue "[mac resource trends]"; echo
 if [ -f "$RESOURCE_LOG" ]; then
   RECENT_RES=$(filter_recent "$RESOURCE_LOG")
   if [ -n "$RECENT_RES" ]; then
-    AVG_LOAD=$(printf '%s\n' "$RECENT_RES" | sed -nE 's/.*"load_1":([^,}]+).*/\1/p' | awk '{ s+=$1; n++ } END { if (n>0) printf "%.2f", s/n }')
+    AVG_LOAD=$(printf '%s\n' "$RECENT_RES" | sed -nE 's/.*"load1":([^,}]+).*/\1/p' | awk '{ s+=$1; n++ } END { if (n>0) printf "%.2f", s/n }')
     AVG_SWAP=$(printf '%s\n' "$RECENT_RES" | sed -nE 's/.*"swap_pct":([^,}]+).*/\1/p' | awk '{ s+=$1; n++ } END { if (n>0) printf "%.0f", s/n }')
     MAX_SWAP=$(printf '%s\n' "$RECENT_RES" | sed -nE 's/.*"swap_pct":([^,}]+).*/\1/p' | sort -rn | head -1)
     echo "  Avg load (1min): ${AVG_LOAD:-n/a}"
@@ -157,13 +157,13 @@ echo
 color blue "[handoff volume]"; echo
 HANDOFF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/handoffs"
 if [ -d "$HANDOFF_DIR" ]; then
-  if date -u -v-${DAYS}d '+%Y%m%d' >/dev/null 2>&1; then
-    CUTOFF_COMPACT=$(date -u -v-${DAYS}d '+%Y%m%d')
+  if date -u -v-"${DAYS}"d '+%Y%m%d' >/dev/null 2>&1; then
+    CUTOFF_COMPACT=$(date -u -v-"${DAYS}"d '+%Y%m%d')
   else
     CUTOFF_COMPACT=$(date -u -d "-${DAYS} days" '+%Y%m%d' 2>/dev/null || echo "20260101")
   fi
-  RECENT_HANDOFFS=$(ls "$HANDOFF_DIR"/*.md 2>/dev/null | awk -F/ '{print $NF}' | awk -v c="$CUTOFF_COMPACT" '$1 >= c' | wc -l | tr -d ' ')
-  TOTAL_HANDOFFS=$(ls "$HANDOFF_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ')
+  RECENT_HANDOFFS=$(find "$HANDOFF_DIR" -maxdepth 1 -type f -name '*.md' -exec basename {} \; 2>/dev/null | awk -v c="$CUTOFF_COMPACT" '$1 >= c' | wc -l | tr -d ' ')
+  TOTAL_HANDOFFS=$(find "$HANDOFF_DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
   echo "  Recent ($DAYS days): $RECENT_HANDOFFS"
   echo "  Total in folder:     $TOTAL_HANDOFFS"
   if [ "$TOTAL_HANDOFFS" -gt 200 ]; then
@@ -181,7 +181,7 @@ if [ -f "$USAGE_LOG" ]; then
   USAGE_COUNT=$(count_match '^\{' "$RECENT_USAGE")
   echo "  Codex calls:  $USAGE_COUNT"
 else
-  color dim "  (usage-tracker.jsonl not found)"; echo
+  color dim "  (usage-daily.jsonl not found)"; echo
 fi
 echo
 

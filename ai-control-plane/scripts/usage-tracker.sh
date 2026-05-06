@@ -15,6 +15,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG="$HOME/.claude/logs/usage-daily.jsonl"
 TODAY=$(date -u '+%Y-%m-%d')
 SINCE_TS=$(date -v-24H -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -d '24 hours ago' -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)
+SINCE_EPOCH=$(date -v-24H '+%s' 2>/dev/null || date -d '24 hours ago' '+%s' 2>/dev/null || echo 0)
 
 mkdir -p "$(dirname "$LOG")"
 
@@ -37,18 +38,34 @@ fi
 codex_sessions=0
 codex_token_estimate=0
 if [ -d "$HOME/.codex/sessions" ]; then
-  codex_sessions=$(find "$HOME/.codex/sessions" -type f -name '*.jsonl' -newermt "$SINCE_TS" 2>/dev/null | wc -l | tr -d ' ')
+  codex_sessions=$(find "$HOME/.codex/sessions" -type f -name '*.jsonl' -exec sh -c '
+    since="$1"
+    shift
+    for f do
+      mtime=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
+      [ "$mtime" -ge "$since" ] && printf ".\n"
+    done
+  ' sh "$SINCE_EPOCH" {} + 2>/dev/null | wc -l | tr -d ' ')
   # Token estimate: count input/output messages × avg tokens
-  for f in $(find "$HOME/.codex/sessions" -type f -name '*.jsonl' -newermt "$SINCE_TS" 2>/dev/null); do
+  while IFS= read -r -d '' f; do
+    mtime=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
+    [ "$mtime" -lt "$SINCE_EPOCH" ] && continue
     msgs=$(wc -l < "$f" 2>/dev/null || echo 0)
     codex_token_estimate=$((codex_token_estimate + msgs * 500))  # rough estimate
-  done
+  done < <(find "$HOME/.codex/sessions" -type f -name '*.jsonl' -print0 2>/dev/null)
 fi
 
 # ─── ofs handoffs count (audit trail) ────────────────
 handoffs_today=0
 if [ -d "$ROOT/handoffs" ]; then
-  handoffs_today=$(find "$ROOT/handoffs" -type f -name '*.md' -newermt "$SINCE_TS" 2>/dev/null | wc -l | tr -d ' ')
+  handoffs_today=$(find "$ROOT/handoffs" -type f -name '*.md' -exec sh -c '
+    since="$1"
+    shift
+    for f do
+      mtime=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
+      [ "$mtime" -ge "$since" ] && printf ".\n"
+    done
+  ' sh "$SINCE_EPOCH" {} + 2>/dev/null | wc -l | tr -d ' ')
 fi
 
 # ─── Conductor task count (if VPS up) ────────────────

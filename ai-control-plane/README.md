@@ -37,6 +37,8 @@ Nepouštět dvě AI do nekonečné debaty. Používat je jako dvě role nad stej
 ./ai-control-plane/scripts/update-core.sh                 # gcloud/VS Code/brew upgrade + doctor
 ./ai-control-plane/scripts/test-bridge.sh                 # end-to-end smoke test (Codex + Claude)
 ./ai-control-plane/scripts/cleanup-handoffs.sh --dry-run  # rotace audit logu
+./ai-control-plane/scripts/client-security-assessment.sh ai-control-plane/security/profiles/<target>.env
+                                                             # autorizovaný read-only web security baseline
 
 # Bridge: Claude -> Codex
 ./ai-control-plane/scripts/delegate-to-codex.sh /path/to/project "úkol"

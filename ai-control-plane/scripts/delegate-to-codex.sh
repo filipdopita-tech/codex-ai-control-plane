@@ -37,6 +37,7 @@ if [ ! -d "$PROJECT" ]; then
   echo "Project path does not exist: $PROJECT" >&2
   exit 2
 fi
+PROJECT="$(cd "$PROJECT" && pwd)"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HANDOFF="$("$ROOT/scripts/handoff.sh" codex "$PROJECT" "$TASK")"
@@ -81,6 +82,7 @@ fi
 
 START_EPOCH="$(date +%s)"
 
+set +e
 {
   echo "# Codex Result"
   echo
@@ -93,10 +95,14 @@ START_EPOCH="$(date +%s)"
   echo
   echo '```text'
   "${CODEX_CMD[@]}" < "$HANDOFF"
+  CODEX_EXIT=$?
   echo '```'
   echo
   echo "- Finished: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  exit "$CODEX_EXIT"
 } | tee "$RESULT"
+DELEGATE_EXIT_CODE=${PIPESTATUS[0]}
+set -e
 
 echo
 echo "Saved result: $RESULT"
@@ -104,7 +110,6 @@ echo "Saved result: $RESULT"
 # Anti-hallucination gate: capture real git diff in target project + flag
 # claim/diff mismatches. Read-only; never fails the parent. Disable via
 # AI_BRIDGE_VERIFY=0. Pass before-snapshot so verify can compute real delta.
-DELEGATE_EXIT_CODE=$?
 if [ "${AI_BRIDGE_VERIFY:-1}" = "1" ] && [ -x "$ROOT/scripts/verify-codex-result.sh" ]; then
   echo
   CODEX_BEFORE_SNAPSHOT="$BEFORE_SNAPSHOT" \
@@ -179,4 +184,4 @@ fi
 # Cleanup snapshot tmpfile
 [ -n "$BEFORE_SNAPSHOT" ] && rm -f "$BEFORE_SNAPSHOT" 2>/dev/null || true
 
-exit ${DELEGATE_EXIT_CODE:-0}
+exit "${DELEGATE_EXIT_CODE:-0}"

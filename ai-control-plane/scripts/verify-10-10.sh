@@ -28,7 +28,7 @@ check 7 "Obsidian dashboard symlink exists" "[ -f \$HOME/.claude/logs/ecosystem-
 
 # Power layer (Wave 3)
 check 8 "ofs do (smart router→capture)" "\$HOME/.local/bin/ofs do 'uložit nápad: verify' | grep -q captured"
-check 9 "ofs gate (5 dim check, exit 0|2)" "\$HOME/.local/bin/ofs gate ai-control-plane; [ \$? -le 2 ]"
+check 9 "ofs gate (6 checks, exit 0|2)" "\$HOME/.local/bin/ofs gate ai-control-plane; [ \$? -le 2 ]"
 check 10 "ofs heal --dry-run runs" "\$HOME/.local/bin/ofs heal --dry-run --no-notify; [ \$? -le 2 ]"
 check 11 "ofs metrics --json valid" "\$HOME/.local/bin/ofs metrics --json | grep -q '\"window_days\"'"
 check 12 "ofs brand detects banned words" "echo 'Dovoluji si win-win' | \$HOME/.local/bin/ofs brand - | grep -q FAIL"

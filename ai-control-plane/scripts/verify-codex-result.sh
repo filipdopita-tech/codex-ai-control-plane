@@ -74,6 +74,10 @@ echo
 
 cd "$PROJECT_ABS"
 
+redact_report_stream() {
+  perl -pe 's/(LinkedIn client ID:\s*`)[^`]+(`)/$1[REDACTED]$2/gi; s/((?:api[_-]?key|secret|password|token|bearer|client[_ -]?id)\s*[:=]\s*[`"'"'"']?)[A-Za-z0-9_.\/+=:-]{16,}([`"'"'"']?)/$1[REDACTED]$2/gi'
+}
+
 # Git status against last commit
 if [ ! -d "$PROJECT_ABS/.git" ]; then
   IS_GIT=0
@@ -86,7 +90,7 @@ if [ "$IS_GIT" -eq 1 ]; then
   STAGED=$(git diff --cached --shortstat 2>/dev/null || echo "")
   UNSTAGED=$(git diff --shortstat 2>/dev/null || echo "")
   UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | wc -l | tr -d ' ')
-  DIFF_PREVIEW=$(git diff --no-color 2>/dev/null | head -60 || true)
+  DIFF_PREVIEW=$(git diff --no-color 2>/dev/null | redact_report_stream | head -60 || true)
 
   # Compute Codex-only delta when caller provided a pre-run snapshot.
   # Snapshot path comes via CODEX_BEFORE_SNAPSHOT env (set by delegate-to-codex.sh).
@@ -173,6 +177,11 @@ SECRET_HITS=0
 if [ "$IS_GIT" -eq 1 ]; then
   SECRET_HITS=$( ( git diff 2>/dev/null | grep -ciE '(api[_-]?key|secret|password|token|bearer)\s*=\s*["\x27][^"\x27]{16,}' || true ) | tr -d ' \n' )
   SECRET_HITS="${SECRET_HITS:-0}"
+  if [ "${SNAPSHOT_USED:-0}" -eq 1 ] && [ "${CHANGED:-0}" -eq 0 ]; then
+    # In snapshot mode with zero Codex delta, any dirty-tree secret-like diff
+    # is pre-existing context, not a Codex-introduced leak.
+    SECRET_HITS=0
+  fi
 fi
 
 # Verdict

@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # ofs gate — pre-deploy / pre-commit quality + security + brand gate
-# Combines: secret leak scan + brand voice check + lint basics + test gate
+# Combines: secret scan + shell hazards + risky commands + brand + git hygiene + structure.
 # Exit code 0 = PASS, 2 = WARN (manual review), 1 = BLOCK
 # Note: NO pipefail — grep finding no hits is normal, not error
 set -eu
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TARGET="${1:-$(pwd)}"
 
 usage() {
@@ -15,9 +14,10 @@ Usage: ofs gate [PATH]
 Runs pre-deploy gate checks against PATH (default: cwd):
   1. SECRET LEAK    — grep API keys / tokens / .env in tracked files
   2. SHELL HAZARDS  — eval, $(curl|bash), rm -rf /, chmod 777
-  3. BRAND VOICE    — banned words v markdown souborech
-  4. GIT HYGIENE    — uncommitted, .env tracked, large binary blobs
-  5. STRUCTURE      — README/CLAUDE.md exists, executable scripts have shebang
+  3. RISKY COMMANDS — destructive/cloud/client-impacting commands for manual review
+  4. BRAND VOICE    — banned words v markdown souborech
+  5. GIT HYGIENE    — uncommitted, .env tracked, large binary blobs
+  6. STRUCTURE      — README/CLAUDE.md exists, executable scripts have shebang
 
 Exit:
   0 PASS   — žádné nálezy nebo jen WARN dimenze
@@ -61,7 +61,7 @@ color bold "ofs gate — $TARGET"; echo
 echo "================================================="
 
 # ─── 1. SECRET LEAK ─────────────────────────────────────
-color blue "[1/5] SECRET LEAK"; echo
+color blue "[1/6] SECRET LEAK"; echo
 SECRET_PATTERNS='(sk-ant-[a-zA-Z0-9]{20,}|sk-[a-zA-Z0-9]{40,}|AIza[a-zA-Z0-9_-]{30,}|ghp_[a-zA-Z0-9]{30,}|pit-[a-zA-Z0-9]{15,}|AKIA[0-9A-Z]{16}|xoxb-[0-9]+-[0-9]+-[a-zA-Z0-9]+)'
 LEAK_HITS=""
 if command -v git >/dev/null && git rev-parse --git-dir >/dev/null 2>&1; then
@@ -84,7 +84,7 @@ fi
 echo
 
 # ─── 2. SHELL HAZARDS ───────────────────────────────────
-color blue "[2/5] SHELL HAZARDS"; echo
+color blue "[2/6] SHELL HAZARDS"; echo
 HAZARD_HITS=""
 HAZARD_PATTERNS='(curl[^|]*\| ?(bash|sh|zsh)|wget[^|]*\| ?(bash|sh|zsh)|rm -rf /( |$)|chmod 777|eval \$\()'
 if command -v git >/dev/null && git rev-parse --git-dir >/dev/null 2>&1; then
@@ -107,9 +107,32 @@ else
 fi
 echo
 
-# ─── 3. BRAND VOICE (banned words v MD) ─────────────────
-color blue "[3/5] BRAND VOICE (markdown only)"; echo
-BANNED_FILE="$HOME/Documents/oneflow-claude-project/BANNED_WORDS.md"
+# ─── 3. RISKY COMMANDS ───────────────────────────────────
+color blue "[3/6] RISKY COMMANDS"; echo
+RISKY_HITS=""
+RISKY_PATTERNS='(git reset --hard|git clean -fdx|terraform destroy|kubectl delete|gcloud projects delete|aws .* delete-|rm -rf \$[A-Z_]*|chmod -R 777|mkfs\.|dd if=|launchctl unload|security find-(generic|internet)-password)'
+if command -v git >/dev/null && git rev-parse --git-dir >/dev/null 2>&1; then
+  RISK_FILES=$(git ls-files '*.sh' '*.bash' '*.md' 2>/dev/null | head -500)
+  [ -n "$RISK_FILES" ] && RISKY_HITS=$(printf '%s\n' "$RISK_FILES" | xargs grep -nE "$RISKY_PATTERNS" 2>/dev/null \
+    | grep -vE '(^|/)ofs-gate\.sh:' \
+    | head -10 || true)
+else
+  RISKY_HITS=$(find . \( -name "*.sh" -o -name "*.md" \) -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -500 | xargs grep -nE "$RISKY_PATTERNS" 2>/dev/null \
+    | grep -vE '(^|/)ofs-gate\.sh:' \
+    | head -10 || true)
+fi
+
+if [ -n "$RISKY_HITS" ]; then
+  color yellow "  ⚠ WARN — high-risk commands or active-scan flags need manual review:"; echo
+  printf '%s\n' "$RISKY_HITS" | sed 's|^|    |' | head -10
+  WARNINGS=$((WARNINGS+1))
+else
+  color green "  ✓ PASS"; echo
+fi
+echo
+
+# ─── 4. BRAND VOICE (banned words v MD) ─────────────────
+color blue "[4/6] BRAND VOICE (markdown only)"; echo
 BAN_PATTERNS='inovativní|revoluční|komplexní řešení|win-win|synergie|paradigma|disruptivní|dovoluji si|rád bych|s pozdravem|v dnešní době|není žádným tajemstvím|není novinkou|závěrem lze konstatovat|innovative|revolutionary|cutting-edge|game-changing|leverage|paradigm shift|state-of-the-art'
 BRAND_HITS=""
 if command -v git >/dev/null && git rev-parse --git-dir >/dev/null 2>&1; then
@@ -136,8 +159,8 @@ else
 fi
 echo
 
-# ─── 4. GIT HYGIENE ──────────────────────────────────────
-color blue "[4/5] GIT HYGIENE"; echo
+# ─── 5. GIT HYGIENE ──────────────────────────────────────
+color blue "[5/6] GIT HYGIENE"; echo
 if command -v git >/dev/null && git rev-parse --git-dir >/dev/null 2>&1; then
   ENV_TRACKED=$(git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.[a-z]+$' | head -5)
   if [ -n "$ENV_TRACKED" ]; then
@@ -165,8 +188,8 @@ else
 fi
 echo
 
-# ─── 5. STRUCTURE ────────────────────────────────────────
-color blue "[5/5] STRUCTURE"; echo
+# ─── 6. STRUCTURE ────────────────────────────────────────
+color blue "[6/6] STRUCTURE"; echo
 STRUCT_OK=1
 [ ! -f README.md ] && [ ! -f README ] && { color yellow "  ⚠ no README"; echo; STRUCT_OK=0; WARNINGS=$((WARNINGS+1)); }
 # Check shebangs on .sh in scripts/

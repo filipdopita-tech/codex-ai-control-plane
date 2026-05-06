@@ -106,7 +106,7 @@ mkdir -p "$archive_dir"
 printf "source\tsize_bytes\tarchived_to\n" > "$manifest"
 
 while IFS= read -r -d '' file; do
-  rel="${file#$PROJECTS_DIR/}"
+  rel="${file#"$PROJECTS_DIR"/}"
   dest="$archive_dir/projects/$rel"
   mkdir -p "$(dirname "$dest")"
   size="$(stat -f '%z' "$file" 2>/dev/null || echo 0)"

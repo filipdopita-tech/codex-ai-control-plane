@@ -43,13 +43,16 @@ cat > "$REPORT" <<EOF
 
 > Read-only audit, žádné auto-fixy. Filipova akce vyžadována pro každý finding.
 
-## 1. Gitleaks scan handoffs/
+## 1. Gitleaks scans
 
 EOF
 
 # ─── 1. Gitleaks scan handoffs ───────────────────────
 if command -v gitleaks >/dev/null 2>&1; then
-  hits=$(gitleaks detect --source "$ROOT/handoffs" --no-git -v 2>/dev/null | grep -cE 'Finding:|leaks found' 2>/dev/null)
+  hits=0
+  if [ -d "$ROOT/handoffs" ]; then
+    hits=$(gitleaks dir "$ROOT/handoffs" --redact -v 2>/dev/null | grep -cE 'Finding:|leaks found' 2>/dev/null)
+  fi
   hits=${hits:-0}
   if [ "$hits" -gt 0 ] 2>/dev/null; then
     echo_check "🔴" "GITLEAKS HITS" "$hits suspected leaks v handoffs/ — REVIEW + ROTATE"
@@ -57,6 +60,23 @@ if command -v gitleaks >/dev/null 2>&1; then
     findings=$((findings + hits))
   else
     echo_check "✅" "Gitleaks clean" "no findings in handoffs/"
+  fi
+
+  tracked_hits=0
+  if command -v git >/dev/null 2>&1 && git -C "$ROOT/.." rev-parse --git-dir >/dev/null 2>&1; then
+    tracked_tmp="$(mktemp -d)"
+    if git -C "$ROOT/.." ls-files -z | tar --null -T - -C "$ROOT/.." -cf - 2>/dev/null | tar -xf - -C "$tracked_tmp" 2>/dev/null; then
+      tracked_hits=$(gitleaks dir "$tracked_tmp" --redact -v 2>/dev/null | grep -cE 'Finding:|leaks found' 2>/dev/null)
+      tracked_hits=${tracked_hits:-0}
+    fi
+    rm -rf "$tracked_tmp"
+  fi
+  if [ "$tracked_hits" -gt 0 ] 2>/dev/null; then
+    echo_check "🔴" "Tracked tree gitleaks hits" "$tracked_hits suspected current-file finding(s)"
+    critical=$((critical + 1))
+    findings=$((findings + tracked_hits))
+  else
+    echo_check "✅" "Tracked tree gitleaks clean" "current tracked files only"
   fi
 else
   echo_check "⚠️" "Gitleaks not installed" "brew install gitleaks recommended"
@@ -121,12 +141,21 @@ if [ -n "$ports" ]; then
   echo "$ports" >> "$REPORT"
   echo '```' >> "$REPORT"
 
-  # Flag wildcard listeners (potential exposure). Use the normalized port list
-  # because lsof formats LISTEN differently across macOS versions.
-  exposed=$(printf "%s\n" "$ports" | grep -E '\*:[0-9]+' | wc -l | tr -d ' ')
-  if [ "$exposed" -gt 0 ]; then
-    echo_check "⚠️" "$exposed services listening on wildcard interfaces" "review expected local services"
-    printf "%s\n" "$ports" | grep -E '\*:[0-9]+' | sed 's/^/  - /' >> "$REPORT"
+  # Flag wildcard listeners (potential exposure). Built-in Apple continuity
+  # services are tracked separately so routine rapportd/ControlCenter listeners
+  # do not keep the audit permanently yellow.
+  wildcard_ports=$(printf "%s\n" "$ports" | grep -E '\*:[0-9]+' || true)
+  expected_wildcard=$(printf "%s\n" "$wildcard_ports" | grep -E '^(ControlCe|rapportd) ' || true)
+  unexpected_wildcard=$(printf "%s\n" "$wildcard_ports" | grep -Ev '^(ControlCe|rapportd) ' || true)
+  if [ -n "$expected_wildcard" ]; then
+    expected_count=$(printf "%s\n" "$expected_wildcard" | sed '/^$/d' | wc -l | tr -d ' ')
+    echo_check "ℹ️" "$expected_count expected Apple wildcard listener(s)" "rapportd/ControlCenter"
+    printf "%s\n" "$expected_wildcard" | sed 's/^/  - /' >> "$REPORT"
+  fi
+  if [ -n "$unexpected_wildcard" ]; then
+    exposed=$(printf "%s\n" "$unexpected_wildcard" | sed '/^$/d' | wc -l | tr -d ' ')
+    echo_check "⚠️" "$exposed unexpected service(s) listening on wildcard interfaces" "review exposure"
+    printf "%s\n" "$unexpected_wildcard" | sed 's/^/  - /' >> "$REPORT"
     findings=$((findings + 1))
   fi
 fi

@@ -24,6 +24,12 @@ ofs route "task"      # auto routing — lean Codex / full Codex / Claude review
 ofs delegate "task"   # přímo do Codexu (impl v souborech)
 ofs review "task"     # Claude review/risk gate
 ofs verify <path>     # anti-halucinace gate (real git diff vs claims)
+ofs data-os audit     # Claude Code scraping/ads/data-growth capability audit
+ofs data-os init run  # založí auditovatelný data/ads/scraping run folder
+ofs data-os remote "task"
+                      # sync ekosystému → Flash VPS → phone/VPS-first data task
+ofs security-assess ai-control-plane/security/profiles/<target>.env
+                      # autorizovaný read-only web security baseline
 ofs mac               # Mac RAM/swap/CPU detail
 ofs vps               # VPS Flash health
 ofs handoffs          # poslední Codex/Claude handoffs (audit trail)
@@ -96,6 +102,7 @@ Filip
 | `doctor.sh` | Full diagnostic |
 | `codex-bridge-smoke.sh` | Daily smoke test (launchd 10:15) |
 | `mcp-process-audit.sh` | MCP runaway process detection |
+| `oneflow-dnssec-watch.sh` | Watches oneflow.cz DS propagation after Wedos KEYSET submit |
 | `cloudflare-publish-sister-dmarc.sh` | DMARC/SPF/DNSSEC ops pro 6 sister domén |
 
 ### Sub-projects (volitelné, samostatné READMEs)
@@ -103,6 +110,8 @@ Filip
 | Path | Co to je |
 |---|---|
 | [`jobs-cz-system/`](jobs-cz-system/) | Reverse-recruiter pipeline. Scraper jobs.cz + prace.cz + StartupJobs → warm-signal scoring → leads.csv. Daily 06:30. |
+| `research-briefings/YYYY-MM-DD/data-growth-*` | Mac-side Data Growth OS run folders: raw/clean/evidence/report/source-ledger/verification pro scraping, ads intel a lead-gen běhy. |
+| VPS `/root/data-growth-runs/runs/YYYY-MM-DD/data-growth-*` | Flash-side remote-first run folders pro phone/VPS odbavení bez Mac RAM bottlenecku. |
 | [`research-briefings/`](research-briefings/) | Strukturované deep-research briefy (industry, competitors, ecosystem audit). |
 | `ai-control-plane/` | Plán, runbooky, recovery docs, optimization specs. |
 
@@ -129,6 +138,7 @@ Filip
 | `com.filipdopita.usage-tracker` | daily 09:00 | Cross-provider usage summary |
 | `com.filipdopita.claude-history-index` | hourly | Index Claude Code transcripts pro `/recall` |
 | `com.oneflow.codex-bridge-smoke` | daily 10:15 | End-to-end Codex bridge smoke test |
+| `cz.oneflow.oneflow-dnssec-watch` | every 30 min | Watch oneflow.cz DS propagation, ntfy once complete |
 | `com.oneflow.li-token-monitor` | daily | LinkedIn OAuth refresh status |
 | `com.oneflow.daily-ekosystem-health` | daily | 7-dim health audit |
 | `cz.oneflow.ai-radar-daily` | daily 03:35 | External tool radar + cross-ref |
@@ -213,9 +223,9 @@ Pokud chceš inspiraci pro vlastní AI control plane, mrkni primárně na:
 
 ## Stav (k 2026-05-04)
 
-- AI control plane: **production**, daily smoke PASS, verify gate v2.1, 7 Filip browser-gates probed (4 OPEN, 1 CRITICAL: CF token).
+- AI control plane: **production**, daily smoke PASS, verify gate v2.1, DNSSEC KEYSET submitted and authoritative DS visible; remaining browser gates are external token/product decisions, not local defects.
 - jobs-cz-system: **Phase 1+2+3 LIVE**, 3 portály (jobs.cz + prace.cz + StartupJobs), warm-scoring, cross-portal dedup, daily 06:30.
-- Email infra: **TOP state** — DMARC reject, MTA-STS enforce, DNSSEC, 6 sister domén harmonized.
+- Email infra: **TOP state** — DMARC reject, MTA-STS enforce, `oneflow.cz` DNSSEC KEYSET + authoritative DS at CZ.NIC; unregistered sister names are not applicable until purchased.
 - Backup + observability: **10/10** — sops+age, daily encrypted backup, Prometheus+Grafana+Loki, 14 oneflow_* metrics, weekly restore drill.
 - Performance tuning: **bullet-proof** — 6 env vars optimized, master scripts (`perf-status/tune/recovery`), Mac SIGSTOP-able heavy procs.
 - Codex bridge: **verify gate v2.1** (HEAD direction tracking forward/rewound/diverged), eliminuje false-positive REVIEWs.
@@ -228,6 +238,7 @@ Pokud chceš inspiraci pro vlastní AI control plane, mrkni primárně na:
 - Active rules: `~/.claude/rules/{anti-hallucination,completion-mandate,prompt-completeness,hard-stop-zone}.md`
 - Knowledge router (lazy): `~/.claude/rules/knowledge-router.md`
 - Workflow routing (auto-trigger skills): `~/.claude/rules/workflow-routing.md`
+- Data Growth OS: `~/.claude/skills/data-growth-os/SKILL.md` + `ofs data-os audit`
 - VPS infra: `~/.claude/projects/-Users-filipdopita/memory/infra_vps.md`
 - Sync architecture: `~/.claude/projects/-Users-filipdopita/memory/reference_sync_architecture.md`
 

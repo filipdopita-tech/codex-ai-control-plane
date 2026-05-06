@@ -42,7 +42,14 @@ if [ ! -d "$HANDOFF_DIR" ]; then
   exit 0
 fi
 
-mapfile -t ALL_FILES < <(ls -1t "$HANDOFF_DIR" 2>/dev/null | grep -E '\.md$' || true)
+mapfile -t ALL_FILES < <(
+  while IFS= read -r -d '' file; do
+    mtime="$(stat -f %m "$file" 2>/dev/null || stat -c %Y "$file" 2>/dev/null || echo 0)"
+    printf '%s %s\n' "$mtime" "${file#"$HANDOFF_DIR"/}"
+  done < <(find "$HANDOFF_DIR" -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null) \
+    | sort -rn \
+    | sed 's/^[0-9][0-9]* //'
+)
 TOTAL=${#ALL_FILES[@]}
 
 if [ "$TOTAL" -le "$KEEP" ]; then

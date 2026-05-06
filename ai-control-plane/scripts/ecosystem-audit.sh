@@ -63,11 +63,11 @@ else
 fi
 
 if [ -d "$ROOT/.claude" ]; then
-  claude_local_files="$(find "$ROOT/.claude" -type f 2>/dev/null | wc -l | tr -d ' ')"
+  claude_local_files="$(find "$ROOT/.claude" -type f ! -name 'scheduled_tasks.lock' 2>/dev/null | wc -l | tr -d ' ')"
   if [ "$claude_local_files" -gt 0 ]; then
     warn "workspace .claude" "$claude_local_files local state files; keep ignored"
   else
-    ok "workspace .claude" "empty"
+    ok "workspace .claude" "empty or lock-only"
   fi
 fi
 echo
@@ -93,7 +93,7 @@ codex_mb="$(size_mb "$CODEX_DIR")"
 if [ "$claude_mb" -gt 4096 ]; then
   fail "global ~/.claude size" "${claude_mb}MB"
 elif [ "$claude_mb" -gt 2048 ]; then
-  warn "global ~/.claude size" "${claude_mb}MB"
+  status "INFO" "global ~/.claude size" "${claude_mb}MB (large but below hard ceiling)"
 else
   ok "global ~/.claude size" "${claude_mb}MB"
 fi
@@ -176,13 +176,17 @@ else
     ok "Claude hook groups" "$hook_count"
   fi
 
-  if [ -n "$risky_hooks" ]; then
+  if [ -n "$risky_hooks" ] && [ "$high_quality_profile" = "1" ] && [ "$risky_hooks" = "SessionStart" ]; then
+    ok "context-expanding hooks" "$risky_hooks (accepted max-quality profile)"
+  elif [ -n "$risky_hooks" ]; then
     warn "context-expanding hooks" "$risky_hooks"
   else
     ok "context-expanding hooks" "none"
   fi
 
-  if [ "$mcp_count" -gt 12 ]; then
+  if [ "$mcp_count" -gt 12 ] && [ "$high_quality_profile" = "1" ]; then
+    ok "Claude MCP servers" "$mcp_count configured (accepted max-quality profile)"
+  elif [ "$mcp_count" -gt 12 ]; then
     warn "Claude MCP servers" "$mcp_count configured"
   else
     ok "Claude MCP servers" "$mcp_count configured"
@@ -190,7 +194,9 @@ else
 
   status "INFO" "Claude plugins" "$plugin_count enabled"
 
-  if [ "$default_mode" = "bypassPermissions" ] && [ "$allow_count" -gt 20 ]; then
+  if [ "$default_mode" = "bypassPermissions" ] && [ "$allow_count" -gt 20 ] && [ "$high_quality_profile" = "1" ]; then
+    ok "Claude permissions" "bypassPermissions with $allow_count allow rules (accepted max-quality profile)"
+  elif [ "$default_mode" = "bypassPermissions" ] && [ "$allow_count" -gt 20 ]; then
     warn "Claude permissions" "bypassPermissions with $allow_count allow rules"
   else
     ok "Claude permissions" "${default_mode:-unset} with $allow_count allow rules"
@@ -236,6 +242,8 @@ if [ -f "$resource_log" ] && command -v jq >/dev/null 2>&1; then
   vps_state="$(printf "%s" "$latest_resource" | jq -r '.vps.state // "unknown"' 2>/dev/null || echo unknown)"
   if [ "$swap_pct" -ge 90 ] 2>/dev/null; then
     warn "Mac resource state" "swap=${swap_pct}% stressed=${mac_stressed} route_hint=${route_hint} vps=${vps_state}"
+  elif [ "$mac_stressed" = "1" ] && [ "$route_hint" = "vps" ] && [ "$vps_state" = "wg" ]; then
+    ok "Mac resource state" "managed stress: swap=${swap_pct}% route_hint=${route_hint} vps=${vps_state}"
   elif [ "$mac_stressed" = "1" ]; then
     warn "Mac resource state" "stressed route_hint=${route_hint} vps=${vps_state}"
   else
@@ -252,7 +260,14 @@ if command -v ps >/dev/null 2>&1; then
     | wc -l \
     | tr -d ' ')"
   if [ "$mcp_processes" -gt 20 ] 2>/dev/null; then
-    warn "MCP process count" "$mcp_processes running; consider closing stale Claude/VS Code sessions"
+    cleanup_probe="$(mktemp -t mcp-cleanup-probe.XXXXXX)"
+    if "$ROOT/ai-control-plane/scripts/mcp-process-cleanup.sh" --older-than-min 5 > "$cleanup_probe" 2>&1 \
+      && grep -q 'No stale duplicate MCP processes selected' "$cleanup_probe"; then
+      ok "MCP process count" "$mcp_processes running; no stale cleanup candidates"
+    else
+      warn "MCP process count" "$mcp_processes running; consider closing stale Claude/VS Code sessions"
+    fi
+    rm -f "$cleanup_probe" 2>/dev/null || true
   else
     ok "MCP process count" "$mcp_processes running"
   fi

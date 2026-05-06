@@ -36,3 +36,46 @@ external-mirrors/
 
 # Embedded git repo from D4Vinci cherry-pick (2026-05-03)
 D4Vinci-cherry-pick/Cr3dOv3r/
+
+# === PII / Business / Personal data — NEVER commit to public repo ===
+# Personal scrape outputs / followers / contacts / business cards
+tereza-*/
+mnub-vizitky/
+distressed-leads/
+dluhopisy-cz-scraper/
+inbox-pdfs/
+japan-album/
+malpra-redesign-*/
+vector-cert-*/
+
+# Session handoffs with phone numbers / company contacts / Sheet IDs
+HANDOFF-*.md
+NEXT-SESSION-*.md
+
+# Internal security audit / OPSEC materials
+ai-control-plane/security/
+ai-control-plane/evidence/
+ai-control-plane/scripts/agent-security-audit.sh
+ai-control-plane/scripts/client-active-scan.sh
+ai-control-plane/scripts/client-security-assessment.sh
+ai-control-plane/scripts/connector-audit.sh
+ai-control-plane/scripts/oneflow-dnssec-watch.sh
+ai-control-plane/scripts/retest-finding.sh
+ai-control-plane/scripts/risk-register.sh
+ai-control-plane/scripts/security-dashboard.sh
+ai-control-plane/scripts/security-plan.sh
+ai-control-plane/scripts/security-report-index.sh
+ai-control-plane/scripts/evidence-index.sh
+
+# Lead-gen / Sheet-touching scripts (contain Sheet IDs / contact data)
+scripts/build_call_briefs.py
+scripts/push_call_list_sheet.py
+scripts/sheet_3tab_rebuild.py
+scripts/jobs_cz_1000pct_enrichment.py
+scripts/.!*
+
+# Smoke test outputs
+research-briefings/2026-05-05/data-growth-smoke*/
+
+# General log noise
+*.log

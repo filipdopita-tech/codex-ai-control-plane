@@ -19,11 +19,14 @@ LOG="$HOME/.claude/logs/resource-monitor.jsonl"
 ALERT_DIR="/tmp/resource-monitor-alerts"
 VPS_WG="root@10.77.0.1"
 VPS_PUBLIC="root@173.212.220.67"
-SSH_OPTS="-o ConnectTimeout=4 -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+SSH_OPTS=(-o ConnectTimeout=4 -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
 
 mkdir -p "$(dirname "$LOG")" "$ALERT_DIR"
 
 ts() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
+shell_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
 
 # ─── Mac metrics ─────────────────────────────────────
 mac_load_1=$(uptime | awk -F'load averages:' '{print $2}' | awk '{print $1}' | tr -d ',' | tr -d ' ')
@@ -52,17 +55,17 @@ vps_disk_pct=""
 conductor_inbox=0
 conductor_active=0
 
-if ssh $SSH_OPTS "$VPS_WG" "true" 2>/dev/null; then
+if ssh "${SSH_OPTS[@]}" "$VPS_WG" "true" 2>/dev/null; then
   vps_state="wg"
   vps_target="$VPS_WG"
-elif ssh $SSH_OPTS "$VPS_PUBLIC" "true" 2>/dev/null; then
+elif ssh "${SSH_OPTS[@]}" "$VPS_PUBLIC" "true" 2>/dev/null; then
   vps_state="public"
   vps_target="$VPS_PUBLIC"
 fi
 
 if [ "$vps_state" != "down" ]; then
   read -r vps_load vps_ram_used vps_ram_total vps_disk_pct conductor_inbox conductor_active < <(
-    ssh $SSH_OPTS "$vps_target" '
+    ssh "${SSH_OPTS[@]}" "$vps_target" '
       load=$(uptime | awk "{print \$(NF-2)}" | tr -d ",")
       ram_line=$(free -m | awk "/^Mem:/ {print \$3, \$2}")
       ram_used=$(echo "$ram_line" | awk "{print \$1}")
@@ -94,8 +97,8 @@ if [ "$mac_stressed" -eq 1 ]; then
 fi
 
 # ─── Snapshot ────────────────────────────────────────
-snapshot=$(printf '{"ts":"%s","mac":{"load1":%s,"load5":%s,"swap_used_mb":%s,"swap_total_mb":%s,"swap_pct":%s,"pressure_level":%s,"top_ram":"%s","stressed":%s},"vps":{"state":"%s","load":"%s","ram_used":"%s","ram_total":"%s","disk_pct":"%s"},"conductor":{"inbox":%s,"active":%s},"route_hint":"%s"}' \
-  "$(ts)" "${mac_load_1:-0}" "${mac_load_5:-0}" "${swap_used:-0}" "${swap_total:-0}" "${swap_pct:-0}" "${mem_pressure:-0}" "$top_ram" "$mac_stressed" \
+snapshot=$(printf '{"ts":"%s","mac":{"load1":%s,"load5":%s,"load15":%s,"swap_used_mb":%s,"swap_total_mb":%s,"swap_pct":%s,"pressure_level":%s,"top_ram":"%s","stressed":%s},"vps":{"state":"%s","load":"%s","ram_used":"%s","ram_total":"%s","disk_pct":"%s"},"conductor":{"inbox":%s,"active":%s},"route_hint":"%s"}' \
+  "$(ts)" "${mac_load_1:-0}" "${mac_load_5:-0}" "${mac_load_15:-0}" "${swap_used:-0}" "${swap_total:-0}" "${swap_pct:-0}" "${mem_pressure:-0}" "$top_ram" "$mac_stressed" \
   "$vps_state" "${vps_load:-}" "${vps_ram_used:-}" "${vps_ram_total:-}" "${vps_disk_pct:-}" \
   "${conductor_inbox:-0}" "${conductor_active:-0}" "$hint")
 
@@ -107,7 +110,7 @@ if [ -t 1 ]; then
 import json,sys
 d=json.loads(sys.stdin.read())
 m=d["mac"]; v=d["vps"]; c=d["conductor"]
-print(f"Mac load={m[\"load1\"]} swap={m[\"swap_pct\"]}% press={m[\"pressure_level\"]} stressed={m[\"stressed\"]} | VPS state={v[\"state\"]} load={v[\"load\"]} ram={v[\"ram_used\"]}/{v[\"ram_total\"]}MB | Conductor inbox={c[\"inbox\"]} active={c[\"active\"]} | hint={d[\"route_hint\"]}")
+print(f"Mac load={m[\"load1\"]}/{m[\"load5\"]}/{m[\"load15\"]} swap={m[\"swap_pct\"]}% press={m[\"pressure_level\"]} stressed={m[\"stressed\"]} | VPS state={v[\"state\"]} load={v[\"load\"]} ram={v[\"ram_used\"]}/{v[\"ram_total\"]}MB | Conductor inbox={c[\"inbox\"]} active={c[\"active\"]} | hint={d[\"route_hint\"]}")
 ' 2>/dev/null || echo "$snapshot"
 fi
 
@@ -122,8 +125,13 @@ alert() {
   # Try VPS ntfy
   local sent=0
   if [ "$vps_state" != "down" ]; then
-    ssh $SSH_OPTS "$vps_target" \
-      "curl -s -o /dev/null -H 'Title: $title' -H 'Priority: $priority' -d '$msg' http://localhost:2586/Filip" \
+    local q_title q_priority
+    q_title="$(shell_quote "$title")"
+    q_priority="$(shell_quote "$priority")"
+    # shellcheck disable=SC2029 # q_title/q_priority are locally shell-quoted before remote execution.
+    ssh "${SSH_OPTS[@]}" "$vps_target" \
+      "TITLE=$q_title PRIORITY=$q_priority curl -s -o /dev/null -H \"Title: \$TITLE\" -H \"Priority: \$PRIORITY\" --data-binary @- http://localhost:2586/Filip" \
+      <<<"$msg" \
       2>/dev/null && sent=1 || true
   fi
   [ "$sent" -eq 0 ] && {

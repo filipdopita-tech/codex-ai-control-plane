@@ -60,7 +60,7 @@ cat ~/.config/sops/age/keys.txt
 Výstup vypadá takhle:
 ```
 # created: 2026-05-03T...
-# public key: age1kdwk247yuxsx5rxtel32j2ksz6pc9vk40c5cf7c3zkyduxzxf3yqv5clcd
+# public key: <example age public key>
 AGE-SECRET-KEY-1...50CHAR-STRING...
 ```
 

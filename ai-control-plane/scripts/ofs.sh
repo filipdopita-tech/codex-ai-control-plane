@@ -73,6 +73,11 @@ notify() {
       -d "$msg" "$NTFY_PUBLIC" 2>/dev/null && sent=1 || true
   fi
   if [ "$sent" -eq 0 ]; then
+    curl -s -o /dev/null --max-time 5 \
+      -H "Title: $title" -H "Priority: $priority" \
+      -d "$msg" "$NTFY_FALLBACK" 2>/dev/null && sent=1 || true
+  fi
+  if [ "$sent" -eq 0 ]; then
     osascript -e "display notification \"$msg\" with title \"$title\"" 2>/dev/null || true
   fi
 }
@@ -334,6 +339,151 @@ cmd_bridge_smoke() {
   log "bridge-smoke" "ok" ""
 }
 
+cmd_security_assess() {
+  local profile="${1:-}"
+  if [ -z "$profile" ]; then
+    color red "Usage: ofs security-assess ai-control-plane/security/profiles/<target>.env"; echo
+    color yellow "Template: $ROOT/security/templates/client-assessment.env.example"; echo
+    exit 1
+  fi
+  log "security-assess" "start" "$profile"
+  "$ROOT/scripts/client-security-assessment.sh" "$profile"
+  log "security-assess" "ok" "$profile"
+}
+
+cmd_security_plan() {
+  local profile="${1:-}"
+  if [ -z "$profile" ]; then
+    color red "Usage: ofs security-plan ai-control-plane/security/profiles/<target>.env"; echo
+    color yellow "Template: $ROOT/security/templates/client-assessment.env.example"; echo
+    exit 1
+  fi
+  log "security-plan" "start" "$profile"
+  "$ROOT/scripts/security-plan.sh" "$profile"
+  log "security-plan" "ok" "$profile"
+}
+
+cmd_security_report_index() {
+  log "security-report-index" "start" ""
+  "$ROOT/scripts/security-report-index.sh"
+  log "security-report-index" "ok" ""
+}
+
+cmd_active_scan() {
+  local profile="${1:-}"
+  if [ -z "$profile" ]; then
+    color red "Usage: ofs active-scan ai-control-plane/security/profiles/<target>.env"; echo
+    color yellow "Requires AUTHORIZED=1 and ALLOW_ACTIVE_SCAN=1"; echo
+    exit 1
+  fi
+  log "active-scan" "start" "$profile"
+  "$ROOT/scripts/client-active-scan.sh" "$profile"
+  log "active-scan" "ok" "$profile"
+}
+
+cmd_retest() {
+  local finding="${1:-}"
+  if [ -z "$finding" ]; then
+    color red "Usage: ofs retest ai-control-plane/security/reports/<report>/findings/<finding>.md"; echo
+    exit 1
+  fi
+  log "retest" "start" "$finding"
+  "$ROOT/scripts/retest-finding.sh" "$finding"
+  log "retest" "ok" "$finding"
+}
+
+cmd_evidence() {
+  log "evidence" "start" ""
+  "$ROOT/scripts/evidence-index.sh"
+  log "evidence" "ok" ""
+}
+
+cmd_risks() {
+  log "risks" "start" ""
+  "$ROOT/scripts/risk-register.sh"
+  log "risks" "ok" ""
+}
+
+cmd_agent_security() {
+  log "agent-security" "start" ""
+  "$ROOT/scripts/agent-security-audit.sh"
+  log "agent-security" "ok" ""
+}
+
+cmd_connector_audit() {
+  log "connector-audit" "start" ""
+  "$ROOT/scripts/connector-audit.sh"
+  log "connector-audit" "ok" ""
+}
+
+cmd_data_os() {
+  local mode="${1:-audit}"
+  case "$mode" in
+    audit|doctor|env|list)
+      log "data-os" "start" "$mode"
+      "$HOME/.claude/scripts/data-growth-os-audit.sh" "$WORKSPACE_DEFAULT" "$mode"
+      log "data-os" "ok" "$mode"
+      ;;
+    init)
+      shift || true
+      log "data-os" "start" "init ${1:-}"
+      "$HOME/.claude/scripts/data-growth-os-audit.sh" "$WORKSPACE_DEFAULT" init "${1:-}"
+      log "data-os" "ok" "init ${1:-}"
+      ;;
+    sync-flash|sync|flash-sync)
+      log "data-os" "start" "sync-flash"
+      "$ROOT/scripts/sync-ecosystem-to-flash.sh"
+      "$HOME/.claude/scripts/data-growth-os-audit.sh" "$WORKSPACE_DEFAULT" flash-status
+      log "data-os" "ok" "sync-flash"
+      ;;
+    flash-status|remote-status)
+      log "data-os" "start" "$mode"
+      "$HOME/.claude/scripts/data-growth-os-audit.sh" "$WORKSPACE_DEFAULT" flash-status
+      log "data-os" "ok" "$mode"
+      ;;
+    flash-init)
+      shift || true
+      log "data-os" "start" "flash-init ${1:-}"
+      "$HOME/.claude/scripts/data-growth-os-audit.sh" "$WORKSPACE_DEFAULT" flash-init "${1:-}"
+      log "data-os" "ok" "flash-init ${1:-}"
+      ;;
+    validate)
+      shift || true
+      log "data-os" "start" "validate ${1:-}"
+      "$HOME/.claude/scripts/data-growth-os-audit.sh" "$WORKSPACE_DEFAULT" validate "${1:-}"
+      log "data-os" "ok" "validate ${1:-}"
+      ;;
+    remote|dispatch)
+      shift || true
+      local task="$*"
+      if [ -z "$task" ]; then
+        color red "Usage: ofs data-os remote \"task\""; echo
+        exit 1
+      fi
+      log "data-os" "start" "remote $task"
+      "$ROOT/scripts/sync-ecosystem-to-flash.sh" >/dev/null
+      cmd_dispatch "REMOTE-FLASH DATA GROWTH OS TASK.
+
+Run this on Flash VPS compute, not on Mac. Use /root/.claude-ecosystem skills/rules and create or update /root/data-growth-runs/runs/<date>/data-growth-<slug>/ with raw/, clean/, evidence/, report.md, verification.md, source-ledger.csv, decisions.jsonl.
+
+Use data-growth-os and data-growth-operator behavior. Respect hard stops: no personal FB/IG/LinkedIn cookies, no sending outreach, no ad spend changes, no paid provider use without explicit approval. Prefer public/free sources and Scrapling/Apify/DataForSEO/Firecrawl only according to source-policy.
+
+Task: $task"
+      log "data-os" "ok" "remote $task"
+      ;;
+    *)
+      color red "Usage: ofs data-os [audit|doctor|env|list|init <slug>|validate [slug-or-path]|sync-flash|flash-status|flash-init <slug>|remote \"task\"]"; echo
+      exit 1
+      ;;
+  esac
+}
+
+cmd_security_dashboard() {
+  log "security-dashboard" "start" ""
+  "$ROOT/scripts/security-dashboard.sh"
+  log "security-dashboard" "ok" ""
+}
+
 cmd_doctor() {
   log "doctor" "start" ""
   "$ROOT/scripts/doctor.sh"
@@ -451,7 +601,8 @@ cmd_dispatch() {
     esac
   done
 
-  local v=$(vps_status)
+  local v
+  v=$(vps_status)
   if [ "$v" = "down" ]; then
     color red "VPS Flash DOWN — dispatch endpoint unreachable. Recovery: $ROOT/RECOVERY-VPS-FLASH.md"; echo
     log "dispatch" "fail" "vps_down"
@@ -507,8 +658,10 @@ cmd_dispatch() {
     -H "Content-Type: application/json" \
     -H "X-Hub-Signature-256: sha256=$sig" \
     -d "$payload" --max-time 30 -w "\n___CODE=%{http_code}")
-  local code=$(echo "$resp" | grep -oE "___CODE=[0-9]+" | cut -d= -f2)
-  local body=$(echo "$resp" | sed 's/___CODE=[0-9]*//')
+  local code
+  local body
+  code=$(echo "$resp" | grep -oE "___CODE=[0-9]+" | cut -d= -f2)
+  body=$(echo "$resp" | sed 's/___CODE=[0-9]*//')
 
   if [ "$code" = "202" ] || [ "$code" = "200" ]; then
     color green "✓ Dispatch accepted (HTTP $code)"; echo
@@ -603,6 +756,29 @@ COMMANDS
     optimize [--fast]   safe daily optimizer: updates/checks + Mac/MCP/handoff audit
     mcp-cleanup [args]  dry-run stale duplicate MCP cleanup; use --apply explicitly
     bridge-smoke        low-cost Codex bridge smoke; expects OK_NOOP verify verdict
+    security-assess PROFILE
+                        authorized read-only web security baseline; requires AUTHORIZED=1
+    security-plan PROFILE
+                        offline ASVS/WSTG test plan generator from an assessment profile
+    security-report-index
+                        regenerate security/reports/INDEX.md
+    active-scan PROFILE
+                        optional gated active checks; requires AUTHORIZED=1 + ALLOW_ACTIVE_SCAN=1
+    retest FINDING.md   create remediation verification draft for a finding
+    evidence            regenerate local evidence/INDEX.md
+    risks               regenerate local evidence/open-risks.md
+    agent-security      audit local agentic security controls
+    connector-audit     audit local connector/plugin risk surfaces
+    data-os [audit]     audit scraping/ads/data-growth Claude Code layer
+    data-os env         check provider env presence without printing secrets
+    data-os list        list recent data-growth runs
+    data-os init SLUG   create standard run folder for data/ads/scraping work
+    data-os validate [RUN] validate latest or selected data-growth run folder
+    data-os sync-flash  sync Claude/Data Growth OS ecosystem to Flash VPS
+    data-os flash-status verify Flash has Data Growth OS and remote run root
+    data-os flash-init SLUG create remote run folder on Flash VPS
+    data-os remote "task" dispatch phone/VPS-first Data Growth OS task to Flash
+    security-dashboard  compact security posture summary
     handoffs [N]        list last N handoffs (default 10)
     handoff <file>      tail specific handoff
     verify [path]       anti-halucination gate: real git diff vs Codex claim
@@ -640,7 +816,7 @@ COMMANDS
   10/10 power layer
     do "task"           smart intent router (auto-pick: codex/claude/dispatch/capture/...)
     brain "query"       cross-context search (memory + vault + handoffs + git + audit)
-    gate [path]         pre-deploy gate (secrets + shell hazards + brand + git + structure)
+    gate [path]         pre-deploy gate (secrets + shell hazards + risky commands + brand + git + structure)
     heal [--dry-run]    self-heal layer — detect+restart down services + ntfy
     metrics [--days N]  performance dashboard from real audit logs
     capture "text"      quick-save → Obsidian inbox + log (--tag idea|todo|insight)
@@ -687,6 +863,17 @@ case "${1:-help}" in
   optimize|opt) shift; cmd_optimize "$@" ;;
   mcp-cleanup|mcpc) shift; cmd_mcp_cleanup "$@" ;;
   bridge-smoke|bs) shift; cmd_bridge_smoke "$@" ;;
+  security-assess|sec-assess|assess) shift; cmd_security_assess "$@" ;;
+  security-plan|sec-plan) shift; cmd_security_plan "$@" ;;
+  security-report-index|sec-index) shift; cmd_security_report_index "$@" ;;
+  active-scan|activescan) shift; cmd_active_scan "$@" ;;
+  retest)      shift; cmd_retest "$@" ;;
+  evidence|ev) shift; cmd_evidence "$@" ;;
+  risks|risk)  shift; cmd_risks "$@" ;;
+  agent-security|agentsec) shift; cmd_agent_security "$@" ;;
+  connector-audit|connectors) shift; cmd_connector_audit "$@" ;;
+  data-os|dataos|growth-os) shift; cmd_data_os "$@" ;;
+  security-dashboard|sec-dashboard) shift; cmd_security_dashboard "$@" ;;
   doctor|dr)   shift; cmd_doctor "$@" ;;
   handoffs|h)  shift; cmd_handoffs "$@" ;;
   handoff)     shift; cmd_handoff "$@" ;;

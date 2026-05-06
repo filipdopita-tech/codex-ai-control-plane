@@ -201,8 +201,61 @@ EOF
 
   check-auth|auth-check|ca)
     vps_check
+    if ssh "$VPS" "python3 - <<'PY'
+import json, re, subprocess, pathlib
+
+def run(cmd):
+    return subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.strip()
+
+auth_raw = run('claude auth status')
+try:
+    auth = json.loads(auth_raw or '{}')
+except Exception:
+    auth = {}
+
+state = run('systemctl is-active claude-rc 2>/dev/null') or 'unknown'
+log = pathlib.Path('/var/log/claude-rc.log')
+text = log.read_text(errors='ignore') if log.exists() else ''
+url_present = bool(re.search(r'https://claude\\.ai/code\\?environment=env_[A-Za-z0-9]+', text))
+logged = auth.get('loggedIn', 'unknown')
+
+if state == 'active' and url_present:
+    print(f'usable=true auth={logged} service={state} session_url_present=true')
+    raise SystemExit(0)
+
+print(f'usable=false auth={logged} service={state} session_url_present={str(url_present).lower()}')
+raise SystemExit(1)
+PY"; then
+      exit 0
+    fi
+    # If server-mode is not actually usable, fall back to the alerting auth
+    # detector on Flash so expiry notifications still fire for real failures.
     ssh "$VPS" "/usr/local/bin/check-flash-auth.sh ${1:-}" 2>/dev/null \
-      || ssh "$VPS" "claude auth status 2>&1 | head -8"
+      || ssh "$VPS" "python3 - <<'PY'
+import json, re, subprocess, pathlib
+
+def run(cmd):
+    return subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.strip()
+
+auth_raw = run('claude auth status')
+try:
+    auth = json.loads(auth_raw or '{}')
+except Exception:
+    auth = {}
+
+state = run('systemctl is-active claude-rc 2>/dev/null') or 'unknown'
+log = pathlib.Path('/var/log/claude-rc.log')
+text = log.read_text(errors='ignore') if log.exists() else ''
+url_present = bool(re.search(r'https://claude\\.ai/code\\?environment=env_[A-Za-z0-9]+', text))
+logged = auth.get('loggedIn', 'unknown')
+
+if state == 'active' and url_present:
+    print(f'usable=true auth={logged} service={state} session_url_present=true')
+    raise SystemExit(0)
+
+print(f'usable=false auth={logged} service={state} session_url_present={str(url_present).lower()}')
+raise SystemExit(1)
+PY"
     ;;
 
   -h|--help|help)

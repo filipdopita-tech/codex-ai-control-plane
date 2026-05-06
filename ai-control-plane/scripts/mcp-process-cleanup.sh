@@ -79,71 +79,80 @@ MIN_AGE=$((OLDER_THAN_MIN * 60))
 tmp="$(mktemp -t mcp-cleanup.XXXXXX)"
 trap 'rm -f "$tmp"' EXIT
 
-ps -axo pid=,etime=,command= 2>/dev/null | awk -v min_age="$MIN_AGE" -v only_kind="$ONLY_KIND" '
-function etime_seconds(raw, parts, n, days, h, m, s, rest) {
-  days=0
-  rest=raw
-  if (index(raw, "-") > 0) {
-    split(raw, parts, "-")
-    days=parts[1]
-    rest=parts[2]
-  }
-  n=split(rest, parts, ":")
-  if (n == 3) {
-    h=parts[1]; m=parts[2]; s=parts[3]
-  } else if (n == 2) {
-    h=0; m=parts[1]; s=parts[2]
-  } else {
-    h=0; m=0; s=parts[1]
-  }
-  return (days * 86400) + (h * 3600) + (m * 60) + s
-}
-function kind_for(cmd) {
-  if (cmd ~ /code-review-graph serve/) return "code-review-graph"
-  if (cmd ~ /obsidian-mcp/) return "obsidian-mcp"
-  if (cmd ~ /context7-mcp/) return "context7-mcp"
-  if (cmd ~ /stitch-mcp/) return "stitch-mcp"
-  if (cmd ~ /mcp-server-filesystem/) return "filesystem-mcp"
-  if (cmd ~ /scrapling mcp/) return "scrapling-mcp"
-  if (cmd ~ /memory-search-mcp/) return "memory-search-mcp"
-  return ""
-}
-{
-  pid=$1
-  etime=$2
-  cmd=$0
-  sub(/^[[:space:]]*[0-9]+[[:space:]]+[^[:space:]]+[[:space:]]+/, "", cmd)
-  kind=kind_for(cmd)
-  if (kind == "") next
-  if (only_kind != "" && kind != only_kind) next
+python3 - "$MIN_AGE" "$ONLY_KIND" > "$tmp" <<'PY'
+import re
+import subprocess
+import sys
+from collections import defaultdict
 
-  age=etime_seconds(etime)
-  if (age < min_age) next
+min_age = int(sys.argv[1])
+only_kind = sys.argv[2]
 
-  count[kind] += 1
-  pids[kind, count[kind]]=pid
-  ages[kind, count[kind]]=age
-  cmds[kind, count[kind]]=cmd
-}
-END {
-  for (kind in count) {
-    # Keep the two newest matching processes per kind. Older duplicates are cleanup candidates.
-    keep=2
-    for (i=1; i<=count[kind]; i++) {
-      for (j=i+1; j<=count[kind]; j++) {
-        if (ages[kind, j] < ages[kind, i]) {
-          ta=ages[kind, i]; ages[kind, i]=ages[kind, j]; ages[kind, j]=ta
-          tp=pids[kind, i]; pids[kind, i]=pids[kind, j]; pids[kind, j]=tp
-          tc=cmds[kind, i]; cmds[kind, i]=cmds[kind, j]; cmds[kind, j]=tc
-        }
-      }
-    }
-    for (i=keep+1; i<=count[kind]; i++) {
-      printf "%s\t%s\t%d\t%s\n", kind, pids[kind, i], int(ages[kind, i] / 60), cmds[kind, i]
-    }
-  }
-}
-' > "$tmp"
+PATTERNS = [
+    ("code-review-graph", re.compile(r"code-review-graph serve")),
+    ("obsidian-mcp", re.compile(r"obsidian-mcp")),
+    ("context7-mcp", re.compile(r"context7-mcp")),
+    ("stitch-mcp", re.compile(r"stitch-mcp")),
+    ("filesystem-mcp", re.compile(r"mcp-server-filesystem")),
+    ("scrapling-mcp", re.compile(r"scrapling mcp")),
+    ("memory-search-mcp", re.compile(r"memory-search-mcp")),
+]
+
+def etime_seconds(raw: str) -> int:
+    days = 0
+    rest = raw
+    if "-" in raw:
+        day_s, rest = raw.split("-", 1)
+        days = int(day_s or "0")
+    parts = [int(p or "0") for p in rest.split(":")]
+    if len(parts) == 3:
+        h, m, s = parts
+    elif len(parts) == 2:
+        h, m, s = 0, parts[0], parts[1]
+    else:
+        h, m, s = 0, 0, parts[0]
+    return days * 86400 + h * 3600 + m * 60 + s
+
+def kind_for(cmd: str) -> str:
+    for kind, pattern in PATTERNS:
+        if pattern.search(cmd):
+            return kind
+    return ""
+
+groups = defaultdict(list)
+try:
+    ps_out = subprocess.check_output(
+        ["ps", "-axo", "pid=,etime=,command="],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    )
+except Exception:
+    ps_out = ""
+
+for line in ps_out.splitlines():
+    line = line.strip()
+    if not line:
+        continue
+    parts = line.split(None, 2)
+    if len(parts) < 3:
+        continue
+    pid, etime, cmd = parts
+    kind = kind_for(cmd)
+    if not kind or (only_kind and kind != only_kind):
+        continue
+    try:
+        age = etime_seconds(etime)
+    except Exception:
+        continue
+    groups[kind].append((age, pid, cmd))
+
+for kind, rows in groups.items():
+    # Keep the two newest processes per kind regardless of age threshold.
+    rows.sort(key=lambda row: row[0])
+    for age, pid, cmd in rows[2:]:
+        if age >= min_age:
+            print(f"{kind}\t{pid}\t{age // 60}\t{cmd}")
+PY
 
 echo "MCP process cleanup"
 echo "==================="
@@ -166,7 +175,7 @@ if [ "$APPLY" -eq 0 ]; then
   exit 0
 fi
 
-while IFS=$'\t' read -r kind pid age cmd; do
+while IFS=$'\t' read -r kind pid age _cmd; do
   if kill -0 "$pid" 2>/dev/null; then
     echo "TERM $pid ($kind, ${age}min)"
     kill -TERM "$pid" 2>/dev/null || true
@@ -175,7 +184,7 @@ done < "$tmp"
 
 sleep 2
 
-while IFS=$'\t' read -r kind pid age cmd; do
+while IFS=$'\t' read -r kind pid age _cmd; do
   if kill -0 "$pid" 2>/dev/null; then
     echo "KILL $pid ($kind, still running)"
     kill -KILL "$pid" 2>/dev/null || true

@@ -42,17 +42,21 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 3
 fi
 
-# Use Codex workspace itself as target (always exists and is git)
-TARGET="$ROOT/.."
-if [ ! -d "$TARGET/.git" ]; then
-  echo "smoke-fail target not a git repo"
-  printf '{"ts":"%s","verdict":"FAIL","reason":"not_git"}\n' "$(ts)" >> "$LOG"
-  exit 4
-fi
+# Use an isolated throwaway git repository so the smoke result is not polluted
+# by the control-plane working tree. The bridge already writes handoffs/results
+# to the real control plane; the delegated project itself should be pristine.
+TARGET="$(mktemp -d -t codex-bridge-smoke.XXXXXX)"
+SMOKE_CODEX_HOME="$(mktemp -d -t codex-bridge-smoke-home.XXXXXX)"
+cleanup() { rm -rf "$TARGET" "$SMOKE_CODEX_HOME" 2>/dev/null || true; }
+trap cleanup EXIT
+git -C "$TARGET" init -q
+printf '# Codex bridge smoke\n' > "$TARGET/README.md"
+git -C "$TARGET" add README.md
+git -C "$TARGET" -c user.name="Codex Smoke" -c user.email="codex-smoke@localhost" commit -qm "init smoke repo"
 
 # Run smoke test (lean mode = cheapest)
 START=$(ts)
-OUT=$(AI_BRIDGE_CODEX_MODE=lean "$ROOT/scripts/delegate-to-codex.sh" \
+OUT=$(CODEX_HOME="$SMOKE_CODEX_HOME" BRIDGE_TELEMETRY_OFF=1 AI_BRIDGE_CODEX_MODE=lean "$ROOT/scripts/delegate-to-codex.sh" \
   "$TARGET" \
   "Return exactly: smoke-test-ok. Do not edit files." 2>&1 || true)
 END=$(ts)

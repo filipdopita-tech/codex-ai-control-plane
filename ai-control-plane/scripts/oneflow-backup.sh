@@ -148,11 +148,16 @@ log "  ok: $CONFIG_TAR ($(du -h "$CONFIG_TAR" | cut -f1))"
 # ---- 6. App workspace snapshot (selected) ----
 log "tar app workspace (selected dirs only)"
 APPS_TAR="$WORK_DIR/apps_workspace.tar.gz"
+mapfile -t WORKSPACE_DIRS < <(
+  find /root/workspace -mindepth 1 -maxdepth 1 -type d -printf '%P\n' 2>/dev/null \
+    | sed 's|^|root/workspace/|' \
+    | head -20
+)
 tar czf "$APPS_TAR" \
   --exclude='*.log' --exclude='*.pyc' --exclude='__pycache__' --exclude='node_modules' \
   --exclude='.venv' --exclude='venv' --exclude='.next' --exclude='dist' \
   -C / \
-  $(ls -d /root/workspace/*/ 2>/dev/null | head -20 | sed 's|^/||;s|/$||') \
+  "${WORKSPACE_DIRS[@]}" \
   2>>"$LOG_FILE" || log "  workspace tar partial (ok)"
 log "  ok: $APPS_TAR ($(du -h "$APPS_TAR" | cut -f1 || echo n/a))"
 
@@ -165,7 +170,7 @@ log "  ok: $APPS_TAR ($(du -h "$APPS_TAR" | cut -f1 || echo n/a))"
   echo "containers_running:"
   docker ps --format '  - {{.Names}}: {{.Image}} ({{.Status}})'
   echo "files:"
-  (cd "$WORK_DIR" && ls -la | tail -n +2)
+  find "$WORK_DIR" -mindepth 1 -maxdepth 1 -exec ls -ld {} + | sed "s|$WORK_DIR/||"
   echo "total_size: $(du -sh "$WORK_DIR" | cut -f1)"
 } > "$WORK_DIR/MANIFEST.txt"
 
