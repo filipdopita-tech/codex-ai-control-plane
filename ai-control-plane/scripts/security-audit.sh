@@ -23,6 +23,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORKSPACE_ROOT="$(cd "$ROOT/.." && pwd)"
 TODAY=$(date '+%Y%m%d')
 REPORT="$HOME/.claude/logs/security-audit-$TODAY.md"
 ALERT_DIR="/tmp/security-audit-alerts"
@@ -128,6 +129,31 @@ if [ "$secrets_found" -gt 0 ]; then
   critical=$((critical + 1))
 else
   echo_check "✅" "No hardcoded secrets in bridge scripts"
+fi
+
+# ─── 3b. Unignored sensitive files in workspace ──────
+echo "" >> "$REPORT"
+echo "## 3b. Unignored sensitive workspace files" >> "$REPORT"
+echo "" >> "$REPORT"
+
+unignored_sensitive=""
+if command -v git >/dev/null 2>&1 && git -C "$WORKSPACE_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  unignored_sensitive="$(
+    git -C "$WORKSPACE_ROOT" ls-files --others --exclude-standard 2>/dev/null \
+      | grep -Ei '(^|/)([^/]*)(secret|creds|credential|token|password|apikey|api-key)([^/]*)$|(^|/)\.env(\.|$)|\.(pem|key)$' \
+      | grep -Ev '(^|/)(node_modules|\.next)/' \
+      | head -20 || true
+  )"
+fi
+
+if [ -n "$unignored_sensitive" ]; then
+  count=$(printf "%s\n" "$unignored_sensitive" | sed '/^$/d' | wc -l | tr -d ' ')
+  echo_check "🔴" "Unignored sensitive-looking files" "$count file(s) could be accidentally committed"
+  printf "%s\n" "$unignored_sensitive" | sed 's/^/  - /' >> "$REPORT"
+  critical=$((critical + 1))
+  findings=$((findings + count))
+else
+  echo_check "✅" "No unignored sensitive-looking files" "git exclude rules cover current workspace"
 fi
 
 # ─── 4. Listening ports (Mac side) ───────────────────

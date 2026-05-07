@@ -132,11 +132,15 @@ fi
 
 if have npm; then
   NPM_ERR="$(mktemp)"
-  if ! NPM_OUTDATED="$(npm outdated -g --depth=0 2>"$NPM_ERR")"; then
-    warn "npm global" "$(sed -n '1p' "$NPM_ERR")"
-  elif [ -n "$NPM_OUTDATED" ]; then
+  set +e
+  NPM_OUTDATED="$(npm outdated -g --depth=0 2>"$NPM_ERR")"
+  NPM_RC=$?
+  set -e
+  if [ -n "$NPM_OUTDATED" ]; then
     warns=$((warns + 1))
     printf "%s\n" "$NPM_OUTDATED" | sed 's/^/UPDATE npm /'
+  elif [ "$NPM_RC" -ne 0 ]; then
+    warn "npm global" "$(sed -n '1p' "$NPM_ERR")"
   else
     ok "npm global" "no outdated packages reported"
   fi

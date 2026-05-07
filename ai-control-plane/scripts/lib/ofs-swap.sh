@@ -124,9 +124,9 @@ fi
 echo
 
 echo "  3. Offload heavy work na VPS Flash"
-echo "     → ofs delegate \"task\"          # Codex bridge"
-echo "     → ofs dispatch \"task\"          # Hermes webhook (async)"
-echo "     → ssh root@10.77.0.1 'cmd'      # remote shell"
+echo "     → ofs route \"heavy/build/browser task\"  # resource-aware router"
+echo "     → ofs dispatch \"task\"                   # Hermes webhook (async)"
+echo "     → ssh root@10.77.0.1 'cmd'               # remote shell"
 echo
 
 echo "  4. Restart memory-greedy apps"

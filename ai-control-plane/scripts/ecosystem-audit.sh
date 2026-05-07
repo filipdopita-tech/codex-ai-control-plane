@@ -28,6 +28,18 @@ json_get() {
   jq -r "$filter" "$SETTINGS" 2>/dev/null || true
 }
 
+is_high_quality_profile() {
+  [ -f "$SETTINGS" ] || return 1
+  have jq || return 1
+
+  local model effort thinking
+  model="$(jq -r '.model // ""' "$SETTINGS" 2>/dev/null || true)"
+  effort="$(jq -r '.env.CLAUDE_CODE_EFFORT_LEVEL // ""' "$SETTINGS" 2>/dev/null || true)"
+  thinking="$(jq -r '.env.MAX_THINKING_TOKENS // "0"' "$SETTINGS" 2>/dev/null || true)"
+
+  [ "$model" = "claude-opus-4-7" ] && [ "$effort" = "xhigh" ] && [ "$thinking" = "32000" ]
+}
+
 warns=0
 fails=0
 
@@ -83,6 +95,11 @@ done
 echo
 
 echo "Config sizes"
+high_quality_profile=0
+if is_high_quality_profile; then
+  high_quality_profile=1
+fi
+
 claude_mb="$(size_mb "$CLAUDE_DIR")"
 claude_projects_mb="$(size_mb "$CLAUDE_DIR/projects")"
 claude_codex_project_mb="$(size_mb "$CLAUDE_DIR/projects/-Users-filipdopita-Desktop-Codex")"
@@ -105,7 +122,15 @@ else
 fi
 
 if [ "$claude_codex_project_mb" -gt 150 ]; then
-  warn "Codex workspace Claude history" "${claude_codex_project_mb}MB"
+  old_codex_transcripts=0
+  if [ -d "$CLAUDE_DIR/projects/-Users-filipdopita-Desktop-Codex" ]; then
+    old_codex_transcripts="$(find "$CLAUDE_DIR/projects/-Users-filipdopita-Desktop-Codex" -type f -name '*.jsonl' -mtime +7 2>/dev/null | wc -l | tr -d ' ')"
+  fi
+  if [ "$old_codex_transcripts" -gt 0 ] 2>/dev/null; then
+    warn "Codex workspace Claude history" "${claude_codex_project_mb}MB; $old_codex_transcripts archive-eligible transcript(s)"
+  else
+    ok "Codex workspace Claude history" "${claude_codex_project_mb}MB active/recent; no archive-eligible transcripts"
+  fi
 else
   ok "Codex workspace Claude history" "${claude_codex_project_mb}MB"
 fi
@@ -133,11 +158,6 @@ else
   plugin_count="$(json_get '(.enabledPlugins // {}) | keys | length')"
   default_mode="$(json_get '.permissions.defaultMode // ""')"
   allow_count="$(json_get '(.permissions.allow // []) | length')"
-
-  high_quality_profile=0
-  if [ "$model" = "claude-opus-4-7" ] && [ "$effort" = "xhigh" ] && [ "$thinking" = "32000" ]; then
-    high_quality_profile=1
-  fi
 
   case "$model" in
     sonnet|opus|claude-opus-4-7) ok "Claude model" "$model" ;;
@@ -170,13 +190,17 @@ else
     warn "away summary" "${away_summary:-unset}"
   fi
 
-  if [ "$hook_count" -gt 2 ]; then
+  if [ "$hook_count" -gt 6 ]; then
+    warn "Claude hook groups" "$hook_count"
+  elif [ "$hook_count" -gt 2 ] && [ "$high_quality_profile" = "1" ]; then
+    ok "Claude hook groups" "$hook_count (accepted max-quality profile)"
+  elif [ "$hook_count" -gt 2 ]; then
     warn "Claude hook groups" "$hook_count"
   else
     ok "Claude hook groups" "$hook_count"
   fi
 
-  if [ -n "$risky_hooks" ] && [ "$high_quality_profile" = "1" ] && [ "$risky_hooks" = "SessionStart" ]; then
+  if [ -n "$risky_hooks" ] && [ "$high_quality_profile" = "1" ]; then
     ok "context-expanding hooks" "$risky_hooks (accepted max-quality profile)"
   elif [ -n "$risky_hooks" ]; then
     warn "context-expanding hooks" "$risky_hooks"

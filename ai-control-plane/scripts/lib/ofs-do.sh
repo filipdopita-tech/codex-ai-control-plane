@@ -9,6 +9,9 @@ LOG_DIR="$HOME/.claude/logs"
 LOG_FILE="$LOG_DIR/ofs.jsonl"
 mkdir -p "$LOG_DIR"
 
+# shellcheck source=ai-control-plane/scripts/lib/resource-routing.sh
+. "$ROOT/scripts/lib/resource-routing.sh"
+
 ts() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
 
 log_decision() {
@@ -81,7 +84,7 @@ detect_intent() {
     echo "review"; return
   fi
   # codex (implementation keywords)
-  if printf '%s' "$t" | grep -qE '(implement|refactor|fix bug|sprav|naimplementuj|napsat funkci|build (a|the) |create (a |the )?(script|file|module)|write (a |the )?(script|test|function))'; then
+  if printf '%s' "$t" | grep -qE '(implement|refactor|fix bug|sprav|naimplementuj|napsat funkci|build (a|the) |run .*build|next build|playwright|jest|vitest|pytest|deploy|nasadit|otestuj|sestav|create (a |the )?(script|file|module)|write (a |the )?(script|test|function))'; then
     echo "codex"; return
   fi
   # dispatch (remote/phone)
@@ -138,6 +141,12 @@ case "$INTENT" in
     exec "$ROOT/scripts/ofs.sh" review --here "$TASK"
     ;;
   codex)
+    if resource_should_offload_to_vps "$TASK"; then
+      ROUTE="ofs dispatch"
+      log_decision "$INTENT" "$ROUTE" "$TASK"
+      echo "→ Routing: dispatch (Mac pressure high; heavy task offloaded to Flash)"
+      exec "$ROOT/scripts/ofs.sh" dispatch "$(resource_remote_task_payload "$ROOT/.." "$TASK")"
+    fi
     ROUTE="ofs delegate --here"
     log_decision "$INTENT" "$ROUTE" "$TASK"
     echo "→ Routing: delegate --here (Codex implementace)"

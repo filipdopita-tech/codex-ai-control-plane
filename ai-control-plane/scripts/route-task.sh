@@ -63,6 +63,12 @@ VERBOSE="${AI_ROUTER_VERBOSE:-1}"
 HANDOFF_DIR="$ROOT/handoffs"
 mkdir -p "$HANDOFF_DIR"
 
+# Resource-aware guardrail: when Mac swap/load is high and the task is clearly
+# heavy, prefer Flash dispatch over adding another local Codex/browser/build job.
+# Set AI_ROUTER_FORCE_LOCAL=1 for explicit local override.
+# shellcheck source=ai-control-plane/scripts/lib/resource-routing.sh
+. "$ROOT/scripts/lib/resource-routing.sh"
+
 has_any() {
   local pattern="$1"
   printf '%s' "$LOWER_TASK" | grep -qiE "$pattern"
@@ -167,8 +173,17 @@ CODEX_MODE=""
 RISK_LEVEL="low"
 REASON_SUMMARY="strategic/default route"
 FOLLOWUP_REVIEW=0
+RESOURCE_OFFLOAD=0
 
-if [ "$destructive" -gt 0 ] && { [ "$cloud" -gt 0 ] || [ "$impl" -gt 0 ]; }; then
+if resource_should_offload_to_vps "$TASK"; then
+  ACTION="vps_dispatch"
+  CODEX_MODE=""
+  RISK_LEVEL="medium"
+  REASON_SUMMARY="Mac resource pressure is high and task is heavy; route to Flash VPS dispatch"
+  RESOURCE_OFFLOAD=1
+  add_signal "resource-vps"
+  add_reason "Resource offload: Mac load=${RESOURCE_ROUTE_LOAD:-?}, swap=${RESOURCE_ROUTE_SWAP_PCT:-?}%, pressure=${RESOURCE_ROUTE_PRESSURE:-?}, VPS=${RESOURCE_ROUTE_VPS_STATE:-?}."
+elif [ "$destructive" -gt 0 ] && { [ "$cloud" -gt 0 ] || [ "$impl" -gt 0 ]; }; then
   ACTION="claude_review"
   RISK_LEVEL="critical"
   REASON_SUMMARY="destructive/cloud-changing task needs a Claude gate before execution"
@@ -238,6 +253,7 @@ ROUTE_FILE="$HANDOFF_DIR/${STAMP}-route-${SAFE_NAME}-$$.md"
   echo "- Created: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "- Action: $ACTION"
   [ -n "$CODEX_MODE" ] && echo "- Codex mode: $CODEX_MODE"
+  echo "- Resource offload: $RESOURCE_OFFLOAD"
   echo "- Follow-up review: $FOLLOWUP_REVIEW"
   echo "- Risk: $RISK_LEVEL"
   echo "- Signals: ${signals:-none}"
@@ -263,8 +279,8 @@ if [ "$JSON_OUT" -eq 1 ]; then
   esc_risk="$(printf '%s' "$RISK_LEVEL" | json_escape)"
   esc_reason="$(printf '%s' "$REASON_SUMMARY" | json_escape)"
   esc_route="$(printf '%s' "$ROUTE_FILE" | json_escape)"
-  printf '{"project":%s,"action":%s,"codex_mode":%s,"risk":%s,"followup_review":%s,"reason":%s,"route_file":%s}\n' \
-    "$esc_project" "$esc_action" "$esc_codex" "$esc_risk" "$FOLLOWUP_REVIEW" "$esc_reason" "$esc_route"
+  printf '{"project":%s,"action":%s,"codex_mode":%s,"risk":%s,"resource_offload":%s,"followup_review":%s,"reason":%s,"route_file":%s}\n' \
+    "$esc_project" "$esc_action" "$esc_codex" "$esc_risk" "$RESOURCE_OFFLOAD" "$FOLLOWUP_REVIEW" "$esc_reason" "$esc_route"
 elif [ "$VERBOSE" = "1" ]; then
   echo "AI orchestration brain"
   echo "======================"
@@ -273,6 +289,7 @@ elif [ "$VERBOSE" = "1" ]; then
   echo "Action:  $ACTION"
   [ -n "$CODEX_MODE" ] && echo "Codex:   $CODEX_MODE"
   echo "Risk:    $RISK_LEVEL"
+  echo "Offload: $RESOURCE_OFFLOAD"
   echo "Review:  $FOLLOWUP_REVIEW"
   echo "Signals: ${signals:-none}"
   echo "Reason:  $REASON_SUMMARY"
@@ -296,6 +313,9 @@ case "$ACTION" in
     if [ "$FOLLOWUP_REVIEW" -eq 1 ]; then
       "$ROOT/scripts/ask-claude-review.sh" "$PROJECT_ABS" "Review the Codex result for this routed high-risk task. Use the route audit file at $ROUTE_FILE. Original task: $TASK"
     fi
+    ;;
+  vps_dispatch)
+    "$ROOT/scripts/ofs.sh" dispatch "$(resource_remote_task_payload "$PROJECT_ABS" "$TASK")"
     ;;
   claude_review)
     "$ROOT/scripts/ask-claude-review.sh" "$PROJECT_ABS" "$TASK"

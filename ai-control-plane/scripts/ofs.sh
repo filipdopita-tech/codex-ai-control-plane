@@ -39,6 +39,10 @@ mkdir -p "$LOG_DIR"
 # ─── HELPERS ───────────────────────────────────────────────────────────
 ts() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
 
+shell_quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
 log() {
   # Audit log (security: žádná secrets v promptu)
   local action="$1" status="$2" detail="${3:-}"
@@ -63,8 +67,12 @@ notify() {
   local title="$1" msg="$2" priority="${3:-default}"
   local sent=0
   if command -v ssh >/dev/null && ssh -o ConnectTimeout=3 -o BatchMode=yes "$VPS_WG" "true" 2>/dev/null; then
+    local q_title q_priority
+    q_title="$(shell_quote "$title")"
+    q_priority="$(shell_quote "$priority")"
     ssh -o ConnectTimeout=3 -o BatchMode=yes "$VPS_WG" \
-      "curl -s -o /dev/null -H 'Title: $title' -H 'Priority: $priority' -d '$msg' $NTFY_LOCAL" \
+      "TITLE=$q_title PRIORITY=$q_priority curl -s -o /dev/null -H \"Title: \$TITLE\" -H \"Priority: \$PRIORITY\" --data-binary @- $NTFY_LOCAL" \
+      <<<"$msg" \
       && sent=1
   fi
   if [ "$sent" -eq 0 ]; then
@@ -215,7 +223,18 @@ cmd_status() {
 }
 
 cmd_route() {
-  local project task
+  local project task route_args=()
+  while [ $# -gt 0 ]; do
+    case "${1:-}" in
+      --dry-run|--json)
+        route_args+=("$1")
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
   if [ "${1:-}" = "--here" ]; then
     project="$WORKSPACE_DEFAULT"
     shift
@@ -226,10 +245,18 @@ cmd_route() {
     project="$WORKSPACE_DEFAULT"
   fi
   task="$*"
+  if [[ "$task" == *" --dry-run"* ]]; then
+    task="${task% --dry-run}"
+    route_args+=("--dry-run")
+  fi
+  if [[ "$task" == *" --json"* ]]; then
+    task="${task% --json}"
+    route_args+=("--json")
+  fi
   [ -z "$task" ] && { color red "Usage: ofs route [project_path] \"task\""; echo; exit 1; }
   validate_project "$project"
   log "route" "start" "$task"
-  "$ROOT/scripts/route-task.sh" "$project" "$task"
+  "$ROOT/scripts/route-task.sh" "${route_args[@]}" "$project" "$task"
 }
 
 cmd_delegate() {
@@ -337,6 +364,18 @@ cmd_bridge_smoke() {
   log "bridge-smoke" "start" ""
   "$ROOT/scripts/codex-bridge-smoke.sh"
   log "bridge-smoke" "ok" ""
+}
+
+cmd_health_pass() {
+  log "health-pass" "start" "$*"
+  "$ROOT/scripts/enterprise-health-pass.sh" "$@"
+  log "health-pass" "ok" "$*"
+}
+
+cmd_workspace_pass() {
+  log "workspace-pass" "start" "$*"
+  "$ROOT/scripts/workspace-1000-pass.sh" "$@"
+  log "workspace-pass" "ok" "$*"
 }
 
 cmd_security_assess() {
@@ -754,6 +793,8 @@ COMMANDS
   Maintenance
     update              run update-core (gcloud + VS Code ext + brew + doctor)
     optimize [--fast]   safe daily optimizer: updates/checks + Mac/MCP/handoff audit
+    health-pass [args]  enterprise 1000% pass: updates/checks/security/doctor/bridge smoke
+    workspace-pass      cross-workspace 1000% pass for local projects and artifacts
     mcp-cleanup [args]  dry-run stale duplicate MCP cleanup; use --apply explicitly
     bridge-smoke        low-cost Codex bridge smoke; expects OK_NOOP verify verdict
     security-assess PROFILE
@@ -861,6 +902,8 @@ case "${1:-help}" in
   vps|v)       shift; cmd_vps "$@" ;;
   update|u)    shift; cmd_update "$@" ;;
   optimize|opt) shift; cmd_optimize "$@" ;;
+  health-pass|hp) shift; cmd_health_pass "$@" ;;
+  workspace-pass|wp) shift; cmd_workspace_pass "$@" ;;
   mcp-cleanup|mcpc) shift; cmd_mcp_cleanup "$@" ;;
   bridge-smoke|bs) shift; cmd_bridge_smoke "$@" ;;
   security-assess|sec-assess|assess) shift; cmd_security_assess "$@" ;;

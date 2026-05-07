@@ -21,9 +21,17 @@ __pycache__/
 ai-control-plane/handoffs/*.md
 
 # Handoff folders — credentials, never commit
+handoffs/
 handoff-2026-05-03/
 handoff-2026-05-04/
 .gstack/
+
+# Credential exports / one-off personal data cleanups — never commit
+contacts-cleanup-*/
+*creds*.json
+*credentials*.json
+gws-creds.json
+flash-creds*.json
 
 # Nested independent git repo (own remote, manage separately)
 reverse-recruiter/
@@ -36,6 +44,16 @@ external-mirrors/
 
 # Embedded git repo from D4Vinci cherry-pick (2026-05-03)
 D4Vinci-cherry-pick/Cr3dOv3r/
+
+# Nested independent projects (vlastní .git, separátní lifecycle)
+dialdeck/
+oneflow-telegram-drive/
+
+# Scrape outputs containing live session tokens / cookies
+ossium-scrape-*/ossium-session.json
+ossium-scrape-*/authed-catalogs/
+*-session.json
+*session-cookies*.json
 
 # === PII / Business / Personal data — NEVER commit to public repo ===
 # Personal scrape outputs / followers / contacts / business cards

@@ -28,6 +28,14 @@ shell_quote() {
   printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
 }
 
+json_string() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -Rn --arg s "$1" '$s'
+  else
+    python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
+  fi
+}
+
 # ─── Mac metrics ─────────────────────────────────────
 mac_load_1=$(uptime | awk -F'load averages:' '{print $2}' | awk '{print $1}' | tr -d ',' | tr -d ' ')
 mac_load_5=$(uptime | awk -F'load averages:' '{print $2}' | awk '{print $2}' | tr -d ',' | tr -d ' ')
@@ -44,7 +52,8 @@ fi
 mem_pressure=$(sysctl -n kern.memorystatus_level 2>/dev/null || echo 0)
 
 # Top RAM consumer (one-line)
-top_ram=$(ps auxw 2>/dev/null | sort -k4 -rn | awk 'NR==2 {printf "%s:%.1f%%", $11, $4}' | head -c 80)
+top_ram=$(ps auxw 2>/dev/null | sort -k4 -rn | awk 'NR==2 {cmd=$11; for (i=12; i<=NF; i++) cmd=cmd" "$i; printf "%s:%.1f%%", cmd, $4}' | head -c 120)
+top_ram_json="$(json_string "$top_ram")"
 
 # ─── VPS metrics (fast) ───────────────────────────────
 vps_state="down"
@@ -97,8 +106,8 @@ if [ "$mac_stressed" -eq 1 ]; then
 fi
 
 # ─── Snapshot ────────────────────────────────────────
-snapshot=$(printf '{"ts":"%s","mac":{"load1":%s,"load5":%s,"load15":%s,"swap_used_mb":%s,"swap_total_mb":%s,"swap_pct":%s,"pressure_level":%s,"top_ram":"%s","stressed":%s},"vps":{"state":"%s","load":"%s","ram_used":"%s","ram_total":"%s","disk_pct":"%s"},"conductor":{"inbox":%s,"active":%s},"route_hint":"%s"}' \
-  "$(ts)" "${mac_load_1:-0}" "${mac_load_5:-0}" "${mac_load_15:-0}" "${swap_used:-0}" "${swap_total:-0}" "${swap_pct:-0}" "${mem_pressure:-0}" "$top_ram" "$mac_stressed" \
+snapshot=$(printf '{"ts":"%s","mac":{"load1":%s,"load5":%s,"load15":%s,"swap_used_mb":%s,"swap_total_mb":%s,"swap_pct":%s,"pressure_level":%s,"top_ram":%s,"stressed":%s},"vps":{"state":"%s","load":"%s","ram_used":"%s","ram_total":"%s","disk_pct":"%s"},"conductor":{"inbox":%s,"active":%s},"route_hint":"%s"}' \
+  "$(ts)" "${mac_load_1:-0}" "${mac_load_5:-0}" "${mac_load_15:-0}" "${swap_used:-0}" "${swap_total:-0}" "${swap_pct:-0}" "${mem_pressure:-0}" "$top_ram_json" "$mac_stressed" \
   "$vps_state" "${vps_load:-}" "${vps_ram_used:-}" "${vps_ram_total:-}" "${vps_disk_pct:-}" \
   "${conductor_inbox:-0}" "${conductor_active:-0}" "$hint")
 

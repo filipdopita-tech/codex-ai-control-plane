@@ -13,6 +13,9 @@ Environment:
                          auto: keyword-based routing (Google/MCP/browser -> full)
                          lean: gpt-5.5, ignore-user-config (cheap, fast)
                          full: respects ~/.codex/config.toml (plugins, MCP)
+  AI_ROUTER_VPS_OFFLOAD  1 (default) | 0
+                         when Mac is stressed and task is heavy, dispatch to Flash
+  AI_ROUTER_FORCE_LOCAL  1 disables resource offload for this call
 
 Exit codes:
   0  task ran (Codex output captured)
@@ -42,6 +45,39 @@ PROJECT="$(cd "$PROJECT" && pwd)"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HANDOFF="$("$ROOT/scripts/handoff.sh" codex "$PROJECT" "$TASK")"
 RESULT="${HANDOFF%.md}.result.md"
+
+# Mac-pressure guardrail: direct delegate calls are the common accidental path
+# for local builds/browser runs. When the Mac is already stressed and the task
+# is heavy, submit it to Flash instead of starting another local Codex process.
+# Override with AI_ROUTER_FORCE_LOCAL=1 or AI_ROUTER_VPS_OFFLOAD=0.
+# shellcheck source=ai-control-plane/scripts/lib/resource-routing.sh
+. "$ROOT/scripts/lib/resource-routing.sh"
+
+if resource_should_offload_to_vps "$TASK"; then
+  set +e
+  {
+    echo "# Codex Result"
+    echo
+    echo "- Handoff: $HANDOFF"
+    echo "- Project: $PROJECT"
+    echo "- Mode: vps-dispatch"
+    echo "- Started: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    echo "- Resource: Mac load=${RESOURCE_ROUTE_LOAD:-?}, swap=${RESOURCE_ROUTE_SWAP_PCT:-?}%, pressure=${RESOURCE_ROUTE_PRESSURE:-?}, VPS=${RESOURCE_ROUTE_VPS_STATE:-?}"
+    echo
+    echo "## Output"
+    echo
+    echo '```text'
+    "$ROOT/scripts/ofs.sh" dispatch "$(resource_remote_task_payload "$PROJECT" "$TASK")"
+    DISPATCH_EXIT=$?
+    echo '```'
+    echo
+    echo "- Finished: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    exit "$DISPATCH_EXIT"
+  } | tee "$RESULT"
+  DELEGATE_EXIT_CODE=${PIPESTATUS[0]}
+  set -e
+  exit "${DELEGATE_EXIT_CODE:-0}"
+fi
 
 MODE="${AI_BRIDGE_CODEX_MODE:-auto}"
 
