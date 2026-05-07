@@ -69,6 +69,40 @@ vector-cert-*/
 # Session handoffs with phone numbers / company contacts / Sheet IDs
 HANDOFF-*.md
 NEXT-SESSION-*.md
+SESSION-*.md
+DOKONCENI-*.md
+PUSH-BLOCKED-*.md
+WAVE2-*.md
+FILIP-*.md
+FILIP-*.html
+AIRDROP-*.md
+GSTACK-*.md
+UPGRADE-PLAN-*.md
+PERF-TUNING-*.md
+CLAUDE-CODE-CONTEXT-*.md
+AI-CONTROL-PLANE-BASELINE-*.md
+AI-CONTROL-PLANE-CLOSURE-*.md
+AI-CONTROL-PLANE-OPTIMIZATION-*.md
+FINISH-LIST-*.md
+*-NEXT-SESSION-HANDOFF.md
+filip-personal-action-plan-*/
+archive/wave2-pickups/
+research-briefings/*/HANDOFF-*.md
+research-briefings/*/SECURITY-*.md
+research-briefings/*/SISTER-DOMAINS-*.md
+research-briefings/*/verizon-dbir-*
+research-briefings/*/alex2learn-*
+research-briefings/*/d4vinci-FREE-FILIP-TODO.md
+research-briefings/*/ECOSYSTEM-AUDIT-*.md
+research-briefings/*/FILIP-*.md
+research-briefings/*/li-publisher-*.md
+research-briefings/*/jobs-leadgen-*.md
+research-briefings/*/fb-social-legal-*.md
+research-briefings/*/CLOSURE-*.md
+research-briefings/*/public-cz-sources-distressed-*.md
+research-briefings/*/DATA-GROWTH-OS-*UPGRADE.md
+research-briefings/*/scrapling-NEXT-SESSION-*.md
+scrapling-runs/
 
 # Internal security audit / OPSEC materials
 ai-control-plane/security/
